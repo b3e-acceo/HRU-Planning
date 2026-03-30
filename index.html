@@ -218,7 +218,9 @@
     <div class="form-group" id="groupTime" style="display:none"><label class="form-label">Horaire</label><input type="text" id="taskTime" class="form-input"></div>
     <div class="form-group" id="groupLocation" style="display:none"><label class="form-label">Lieu</label><input type="text" id="taskLocation" class="form-input"></div>
     <div class="form-group" id="groupPrestations" style="display:none"><label class="form-label">Prestations</label><textarea id="taskPrestations" class="form-input" rows="3"></textarea></div>
-    <div class="form-group" id="groupAbsence" style="display:none"><label class="form-label">Type absence</label><select id="absenceVal" class="form-input"><option value="CP">CP</option><option value="FÉRIÉ">FÉRIÉ</option></select></div>
+    
+    <div class="form-group" id="groupAbsence" style="display:none"><label class="form-label">Type d'absence</label><select id="absenceVal" class="form-input"><option value="CP">CP</option><option value="FÉRIÉ">FÉRIÉ</option><option value="FORMATION">FORMATION</option></select></div>
+    
     <div class="btn-group"><button onclick="deleteTask()" id="btnDel" style="background:#fceae8; color:var(--red); border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">🗑️ SUPPRIMER</button><button onclick="copyToClipboard()" id="btnCopy" style="background:#546e7a; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">📋 COPIER</button><button onclick="closeModal('taskModal')" style="background:#f5f5f5; color:#666; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">✖ ANNULER</button><button onclick="saveTask()" style="background:var(--accent); color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">💾 ENREGISTRER</button></div>
   </div>
 </div>
@@ -259,7 +261,20 @@ db.ref('planning').on('value', (snapshot) => {
 function sync() { db.ref('planning').set({ tasks: state.tasks, collabs: state.collabs, years: state.years, trash: state.trash }); }
 
 // Logique UI
-window.addEventListener('keydown', (e) => { if (e.key === "Escape") { closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); } });
+window.addEventListener('keydown', (e) => { 
+    if (e.key === "Escape") { 
+        if (clipboardTask) cancelPasteMode();
+        closeModal('favModal'); 
+        closeModal('collabModal'); 
+        closeModal('deleteCollabModal'); 
+        closeModal('taskModal'); 
+        closeModal('viewModal'); 
+        closeModal('trashModal'); // L'instruction manquante est désormais bien présente
+    } 
+    if ((e.key === "Delete" || e.key === "Del") && document.getElementById('taskModal').classList.contains('open') && document.getElementById('editTaskId').value) { 
+        deleteTask(); 
+    } 
+});
 
 function init() { const grid = document.getElementById('profileGrid'); grid.innerHTML = ""; state.collabs.forEach(c => { const btn = document.createElement('div'); btn.className = 'profile-btn'; btn.innerHTML = `<div class="profile-avatar">${c.code}</div><div style="font-size:11px; font-weight:600">${c.name}</div>`; btn.onclick = () => handleProfileSelect(btn, c); grid.appendChild(btn); }); renderYearTabs(); }
 function handleProfileSelect(btn, collab) { state.isAdmin = false; document.getElementById('adminToggle').classList.remove('selected'); document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('selected')); btn.classList.add('selected'); state.user = collab; }
