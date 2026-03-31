@@ -55,7 +55,8 @@
   body.zoom-out .th-tri { font-size: 11px; margin-bottom: 0; }
   body.zoom-out .week-row-head { height: 22px !important; font-size: 9px; line-height: 22px; }
 
-  .zoom-container { display: none; align-items: center; gap: 10px; background: var(--surface2); padding: 5px 15px; border-radius: 20px; border: 1px solid var(--border); margin-left: 10px; }
+  /* Passage de display: none à display: flex par défaut pour que tout le monde le voie quand l'app s'affiche */
+  .zoom-container { display: flex; align-items: center; gap: 10px; background: var(--surface2); padding: 5px 15px; border-radius: 20px; border: 1px solid var(--border); margin-left: 10px; }
   .zoom-slider { cursor: pointer; width: 80px; accent-color: var(--accent); }
   .zoom-label { font-size: 10px; font-weight: 800; color: var(--accent); font-family: 'Space Mono'; }
 
@@ -112,6 +113,9 @@
   .task-item.dimmed, .cell-absence.dimmed { opacity: 0.1 !important; }
   .task-location { font-size: 9px; opacity: 0.8; font-weight: normal; margin-top: 2px; font-style: italic; }
   .task-time-inline { font-size: 9px; font-weight: bold; margin-top: 2px; opacity: 0.9; }
+  
+  .task-url-btn { display: inline-block; margin-top: 4px; font-size: 9px; background: rgba(0,0,0,0.15); padding: 3px 6px; border-radius: 4px; color: inherit; border: none; font-family: inherit; font-weight: bold; cursor: pointer; line-height: 1; }
+  .task-url-btn:hover { background: rgba(0,0,0,0.3); }
 
   .type-intervention { font-weight: 800 !important; }
   .type-reunion { font-weight: 800 !important; background: var(--yellow-livrable) !important; color: #000000 !important; border-left-color: #000000 !important; }
@@ -130,7 +134,6 @@
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 2000; }
   .modal-overlay.open { display: flex; }
   
-  /* --- MODAL PLUS COMPACTE --- */
   .modal { background: var(--surface); padding: 20px; border-radius: 12px; width: 550px; box-shadow: var(--shadow-lg); position: relative; max-height: 95vh; overflow-y: auto;}
   .form-group { margin-bottom: 10px; }
   .form-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px; }
@@ -261,6 +264,7 @@
     <button class="stats-btn" id="lockBtn" onclick="toggleLockPast()" style="display:none; background:var(--orange);">🔓 DÉVERROUILLÉ</button>
     
     <button class="fav-btn" onclick="openFavModal()">⭐ FAVORIS</button>
+    <button class="stats-btn" id="accessBtn" onclick="openAccessModal()" style="display:none; background:var(--green-hru);">🔐 ACCÈS</button>
     <button class="stats-btn" id="statsBtn" onclick="openStatsModal()">📊 STATS</button>
     
     <div class="search-container">
@@ -289,6 +293,18 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="accessModal">
+  <div class="modal">
+    <h3>Gérer les droits d'édition</h3>
+    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Cochez les collaborateurs autorisés à modifier le planning.</p>
+    <div id="accessList" style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; padding: 10px;"></div>
+    <div class="btn-group">
+        <button onclick="closeModal('accessModal')" style="border:none; background:none; color:var(--text); cursor:pointer;">Annuler</button>
+        <button onclick="saveAccess()" style="background:var(--accent); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer;">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="favModal"><div class="modal"><h3>Ma colonne & Ordre</h3><div id="collabFavList" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; margin-top:10px"></div><div class="btn-group"><button onclick="resetFav()" style="margin-right:auto; border:none; background:none; color:var(--red); cursor:pointer;">Réinitialiser Favori</button><button onclick="closeModal('favModal')" style="border:none; background:none; cursor:pointer; padding:8px 15px; color:var(--text)">Fermer</button></div></div></div>
 <div class="modal-overlay" id="collabModal"><div class="modal"><h3>Ajouter collaborateur</h3><div style="margin-top:20px"><label class="form-label">Prénom</label><input type="text" id="newPre" class="form-input"></div><div style="margin-bottom:10px"><label class="form-label">Nom</label><input type="text" id="newNom" class="form-input"></div><div style="margin-bottom:10px"><label class="form-label">Trigramme</label><input type="text" id="newTri" class="form-input" maxlength="3" style="text-transform:uppercase"></div><div class="btn-group"><button onclick="closeModal('collabModal')" style="border:none; background:none; color:var(--text); cursor:pointer;">Annuler</button><button onclick="saveCollab()" style="background:var(--green-hru); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer;">Créer</button></div></div></div>
 <div class="modal-overlay" id="deleteCollabModal"><div class="modal"><h3>Gérer l'équipe</h3><div id="collabDeleteList" style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; margin-top:15px"></div><div class="btn-group"><button onclick="closeModal('deleteCollabModal')" style="border:none; background:none; color:var(--text); cursor:pointer;">Fermer</button></div></div></div>
@@ -309,7 +325,7 @@
     <h3 style="margin-bottom:15px;">Détails de la tâche</h3>
     <div id="viewContentArea"></div>
     
-    <div style="margin-top: 15px; border-top: 1px solid var(--border); padding-top: 10px;">
+    <div id="consultNoteContainer" style="margin-top: 15px; border-top: 1px solid var(--border); padding-top: 10px;">
         <label class="form-label">📝 NOTE DE RETOUR (COMPTE RENDU)</label>
         <textarea id="consultNoteArea" class="form-input" rows="3" placeholder="Ajouter un compte rendu de l'intervention ou une information..."></textarea>
         <input type="hidden" id="consultNoteTaskId">
@@ -356,16 +372,27 @@
     
     <div class="form-group" id="groupContent"><label class="form-label">Description</label><textarea id="taskContent" class="form-input" rows="2"></textarea></div>
     
-    <div class="collab-flex">
+    <div class="collab-flex" id="timeRow">
         <div class="collab-block" id="groupTime" style="display:none"><label class="form-label">Horaire précis</label><input type="text" id="taskTime" class="form-input" placeholder="ex: 09h00"></div>
         <div class="collab-block" id="groupRecurrence" style="display:none"><label class="form-label">Répéter (semaines)</label><input type="number" id="taskRecurrence" class="form-input" min="1" max="52" value="1" title="Si 1, la tâche n'est créée qu'une fois."></div>
     </div>
     
+    <div id="fullDayWrapper" style="display:none;">
+        <label id="fullDayLabel" style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:11px; color:var(--accent);">
+            <input type="checkbox" id="taskFullDay" style="width:16px; height:16px; accent-color:var(--accent);"> TOUTE LA JOURNÉE
+        </label>
+    </div>
+
     <div class="form-group" id="groupLocation" style="display:none"><label class="form-label">Lieu / Adresse</label><input type="text" id="taskLocation" class="form-input"></div>
     <div class="form-group" id="groupPrestations" style="display:none"><label class="form-label">Détail des prestations</label><textarea id="taskPrestations" class="form-input" rows="2"></textarea></div>
-    <div class="form-group" id="groupAbsence" style="display:none"><label class="form-label">Type d'absence</label><select id="absenceVal" class="form-input"><option value="CP">CP</option><option value="FÉRIÉ">FÉRIÉ</option><option value="FORMATION">FORMATION</option></select></div>
+    <div class="form-group" id="groupAbsence" style="display:none"><label class="form-label">Type d'absence</label><select id="absenceVal" class="form-input" onchange="toggleType()"><option value="CP">CP</option><option value="FÉRIÉ">FÉRIÉ</option><option value="FORMATION">FORMATION</option></select></div>
     
     <div class="form-group" id="groupUrl"><label class="form-label">Chemin du dossier serveur</label><input type="text" id="taskUrl" class="form-input" placeholder="ex: Z:\Dossiers\HRU\..."></div>
+
+    <div class="form-group" id="groupAdminNote" style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px;">
+        <label class="form-label">📝 NOTE DE RETOUR (Compte rendu)</label>
+        <textarea id="taskAdminNote" class="form-input" rows="2" placeholder="Ajouter ou modifier une note..."></textarea>
+    </div>
 
     <div class="btn-group">
         <button onclick="deleteTask()" id="btnDel" style="background:#fceae8; color:var(--red); border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🗑️ SUPPRIMER</button>
@@ -403,7 +430,7 @@ firebase.auth().onAuthStateChanged((user) => {
 const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
 let selectedBg = "#E8EEF5", selectedTextColor = "#1A4373", draggedTaskId = null, clipboardTask = null;
 let taskHistory = []; 
-let redoHistory = []; // GESTION DU CTRL+Y
+let redoHistory = []; 
 let state = { user: null, isAdmin: false, collabs: DEFAULT_COLLABS, tasks: [], trash: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
 
 db.ref('planning').on('value', (snapshot) => {
@@ -422,14 +449,20 @@ db.ref('planning').on('value', (snapshot) => {
 });
 
 function sync() { 
-    // Sécurité anti-undefined pour Firebase : on nettoie l'objet en passant par JSON
     const cleanTasks = JSON.parse(JSON.stringify(state.tasks));
     const cleanTrash = JSON.parse(JSON.stringify(state.trash));
 
-    db.ref('planning').update({ 
-        tasks: cleanTasks, collabs: state.collabs, years: state.years, trash: cleanTrash, config: state.config 
-    }).catch(err => {
-        alert("Erreur de sécurité : Seul l'Administrateur peut modifier le planning central.");
+    let payload = { tasks: cleanTasks, trash: cleanTrash };
+
+    // Sécurité: L'Éditeur ne peut pas modifier la configuration
+    if (state.isAdmin) {
+        payload.collabs = state.collabs;
+        payload.years = state.years;
+        payload.config = state.config;
+    }
+
+    db.ref('planning').update(payload).catch(err => {
+        alert("Erreur de synchronisation Firebase. Avez-vous mis à jour les règles ?");
         console.error(err);
     });
 }
@@ -437,7 +470,7 @@ function sync() {
 function saveHistory() {
     taskHistory.push(JSON.stringify(state.tasks));
     if(taskHistory.length > 20) taskHistory.shift(); 
-    redoHistory = []; // Reset du redo si nouvelle action
+    redoHistory = []; 
 }
 
 function undoAction() {
@@ -478,13 +511,11 @@ if(localStorage.getItem('hru_darkmode') === 'true') document.body.classList.add(
 window.addEventListener('keydown', (e) => { 
     const isInputFocused = document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA';
 
-    // Raccourci Annuler (Ctrl+Z) / Rétablir (Ctrl+Shift+Z)
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
         if (isInputFocused) return; 
         e.preventDefault(); 
         if(e.shiftKey) redoAction(); else undoAction(); 
     }
-    // Raccourci Rétablir (Ctrl+Y)
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { 
         if (isInputFocused) return; 
         e.preventDefault(); redoAction(); 
@@ -492,7 +523,7 @@ window.addEventListener('keydown', (e) => {
     
     if (e.key === "Escape") { 
         if (clipboardTask) cancelPasteMode();
-        closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); closeModal('trashModal'); closeModal('statsModal');
+        closeModal('accessModal'); closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); closeModal('trashModal'); closeModal('statsModal');
     } 
     
     if ((e.key === "Delete" || e.key === "Del") && document.getElementById('taskModal').classList.contains('open') && document.getElementById('editTaskId').value) { 
@@ -563,13 +594,15 @@ function doLogin() {
     if (!state.user && !state.isAdmin) return alert("Sélectionnez un profil ou connectez-vous en Admin"); 
     document.getElementById('loginScreen').style.display = 'none'; 
     document.getElementById('app').classList.add('visible'); 
-    document.getElementById('userInfo').textContent = state.isAdmin ? "🔧 Mode Admin" : `👤 Mode Lecture (${state.user.name})`; 
     
+    const isEditor = state.user && state.user.isEditor;
+
     if(state.isAdmin) { 
+        document.getElementById('userInfo').textContent = "🔧 Mode Admin"; 
+        document.getElementById('accessBtn').style.display = 'block';
         document.getElementById('newCollabBtn').style.display = 'block'; 
         document.getElementById('delCollabBtn').style.display = 'block'; 
         document.getElementById('trashBtn').style.display = 'block'; 
-        document.getElementById('zoomControls').style.display = 'flex'; 
         document.getElementById('addYearBtn').style.display = 'flex'; 
         document.getElementById('removeYearBtn').style.display = 'flex'; 
         document.getElementById('exportBtn').style.display = 'block';
@@ -577,12 +610,28 @@ function doLogin() {
         document.getElementById('viewFilter').style.display = 'inline-block';
         document.getElementById('lockBtn').style.display = 'block';
         updateLockBtnUI();
-    } else {
+    } else if(isEditor) {
+        document.getElementById('userInfo').textContent = `📝 Mode Éditeur (${state.user.name})`; 
+        document.getElementById('accessBtn').style.display = 'none';
+        document.getElementById('newCollabBtn').style.display = 'none'; 
+        document.getElementById('delCollabBtn').style.display = 'none'; 
+        document.getElementById('trashBtn').style.display = 'block'; 
+        document.getElementById('addYearBtn').style.display = 'none'; 
+        document.getElementById('removeYearBtn').style.display = 'none'; 
         document.getElementById('exportBtn').style.display = 'none';
         document.getElementById('statsBtn').style.display = 'none';
         document.getElementById('viewFilter').style.display = 'none';
         document.getElementById('viewFilter').value = 'all'; 
         document.getElementById('lockBtn').style.display = 'none';
+    } else {
+        document.getElementById('userInfo').textContent = `👤 Mode Lecture (${state.user.name})`; 
+        document.getElementById('accessBtn').style.display = 'none';
+        document.getElementById('exportBtn').style.display = 'none';
+        document.getElementById('statsBtn').style.display = 'none';
+        document.getElementById('viewFilter').style.display = 'none';
+        document.getElementById('viewFilter').value = 'all'; 
+        document.getElementById('lockBtn').style.display = 'none';
+        document.getElementById('trashBtn').style.display = 'none'; 
     }
     
     const realCurrentYear = new Date().getFullYear();
@@ -593,6 +642,28 @@ function doLogin() {
     renderYearTabs();
     renderPlanning(); 
     setTimeout(scrollToToday, 600); 
+}
+
+// GESTION DES ACCÈS
+function openAccessModal() {
+    const container = document.getElementById('accessList');
+    container.innerHTML = state.collabs.map((c, i) => `
+        <label style="display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid var(--border); cursor:pointer;">
+            <input type="checkbox" id="access_chk_${i}" ${c.isEditor ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--accent);">
+            <b>${c.code}</b> — ${c.name}
+        </label>
+    `).join('');
+    document.getElementById('accessModal').classList.add('open');
+}
+
+function saveAccess() {
+    state.collabs.forEach((c, i) => {
+        const chk = document.getElementById(`access_chk_${i}`);
+        c.isEditor = chk.checked;
+    });
+    sync();
+    closeModal('accessModal');
+    showToast("🔐 Droits mis à jour");
 }
 
 function toggleLockPast() {
@@ -622,7 +693,13 @@ function buildTooltip(task) {
     if(task.time) t += `Heure : ${task.time}\n`;
     if(task.location) t += `Lieu : ${task.location}\n`;
     if(task.prestations) t += `Prestations : ${task.prestations}\n`;
-    if(state.notes && state.notes[task.id]) t += `\n📝 NOTE DE RETOUR :\n${state.notes[task.id]}\n`;
+    
+    const noteData = state.notes && state.notes[task.id];
+    if(noteData) {
+        const nTxt = typeof noteData === 'string' ? noteData : noteData.text;
+        const nAuth = typeof noteData === 'string' ? 'Inconnu' : noteData.author;
+        t += `\n📝 NOTE DE RETOUR (${nAuth}) :\n${nTxt}\n`;
+    }
     return t;
 }
 
@@ -658,6 +735,7 @@ function renderPlanning() {
   
   const searchTerm = document.getElementById('searchInput').value.toLowerCase();
   const filterType = document.getElementById('viewFilter').value;
+  const canEdit = state.isAdmin || (state.user && state.user.isEditor);
   
   const todayStr = getLocalDateString(new Date());
   
@@ -703,7 +781,7 @@ function renderPlanning() {
                 const cell = document.createElement('td');
                 if(isLocked) cell.classList.add('locked-cell');
                 
-                if(state.isAdmin && !isLocked) {
+                if(canEdit && !isLocked) {
                     cell.ondragover = (e) => { e.preventDefault(); };
                     cell.ondrop = (e) => {
                         e.preventDefault(); e.stopPropagation();
@@ -732,17 +810,16 @@ function renderPlanning() {
                 }
 
                 cell.onclick = (e) => { 
-                  if(state.isAdmin && !isLocked) {
+                  if(canEdit && !isLocked) {
                     if(clipboardTask) { e.stopPropagation(); pasteTask(dStr, p, c.code); }
                     else { openModalTask({date:dStr, period:p, collab:c.code}); }
-                  } else if (isLocked && state.isAdmin) {
+                  } else if (isLocked && canEdit) {
                     showToast("🔒 Cette période est verrouillée");
                   }
                 };
                 
                 let dayTasksRaw = state.tasks.filter(t => t.date === dStr && t.period === p && t.collab === c.code).sort((a,b) => (a.position || 0) - (b.position || 0));
                 
-                // Filtre d'affichage
                 let dayTasks = dayTasksRaw;
                 if(filterType === "prod") dayTasks = dayTasksRaw.filter(t => t.type !== "Absence");
                 if(filterType === "abs") dayTasks = dayTasksRaw.filter(t => t.type === "Absence");
@@ -752,19 +829,22 @@ function renderPlanning() {
                 if(filterType === "reunion") dayTasks = dayTasksRaw.filter(t => t.type === "Réunion");
 
                 let cellHasMatch = false;
-                
                 const container = document.createElement('div'); container.className = 'cell-tasks-container';
 
                 dayTasks.forEach(task => {
-                    const hasNote = state.notes && state.notes[task.id];
-                    const noteIndicator = hasNote ? `<div class="task-note-icon">📝</div>` : '';
+                    const noteData = state.notes && state.notes[task.id];
+                    const noteAuthor = noteData ? (typeof noteData === 'string' ? 'Inconnu' : noteData.author) : '';
+                    const noteIndicator = noteData ? `<div class="task-note-icon" title="Note par ${noteAuthor}">📝</div>` : '';
 
                     if (task.type === "Absence") {
                         const div = document.createElement('div'); div.className = "cell-absence"; 
                         div.innerHTML = `<span>${task.content}</span>${noteIndicator}`;
                         
                         let absTitle = "Absence : " + task.content;
-                        if (hasNote) absTitle += `\n\n📝 NOTE :\n${state.notes[task.id]}`;
+                        if (noteData) {
+                            const nTxt = typeof noteData === 'string' ? noteData : noteData.text;
+                            absTitle += `\n\n📝 NOTE (${noteAuthor}) :\n${nTxt}`;
+                        }
                         div.title = absTitle;
                         
                         if (searchTerm && !task.content.toLowerCase().includes(searchTerm)) div.classList.add('dimmed');
@@ -772,18 +852,18 @@ function renderPlanning() {
 
                         div.onclick = (e) => { 
                             e.stopPropagation(); 
-                            if (state.isAdmin && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
-                            else if (state.isAdmin && !isLocked) openModalTask(task); 
+                            if (canEdit && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
+                            else if (canEdit && !isLocked) openModalTask(task); 
                             else openConsultationTask(task); 
                         };
-                        if(state.isAdmin && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
+                        if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
                         container.appendChild(div);
                     } else {
                         const div = document.createElement('div');
                         div.className = `task-item ${task.type === "Intervention site" ? "type-intervention" : task.type === "Réalisation bureau" ? "type-bureau" : task.type === "Réunion" ? "type-reunion" : task.type === "Envoi livrables" ? "type-livrable" : "type-ao"}`;
                         if(task.type === "Réalisation bureau") div.style.borderColor = task.textColor;
                         else if (!task.type.includes("Envoi") && task.type !== "Réunion") { div.style.background = task.bg; div.style.color = task.textColor; div.style.borderLeftColor = task.textColor; }
-                        
+
                         div.innerHTML = `${noteIndicator}<span class="task-desc">${task.content}</span>${(task.type === "Réunion" || task.type === "Intervention site") && task.time ? `<span class="task-time-inline">⏰ ${task.time}</span>`:''}${task.location && (task.type === "Intervention site" || task.type === "Réunion") ? `<span class="task-location">📍 ${task.location}</span>`:''}`;
                         div.title = buildTooltip(task); 
                         
@@ -797,11 +877,11 @@ function renderPlanning() {
 
                         div.onclick = (e) => { 
                             e.stopPropagation(); 
-                            if(state.isAdmin && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
-                            else if(state.isAdmin && !isLocked) openModalTask(task); 
+                            if(canEdit && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
+                            else if(canEdit && !isLocked) openModalTask(task); 
                             else openConsultationTask(task); 
                         };
-                        if(state.isAdmin && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
+                        if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
                         container.appendChild(div);
                     }
                 });
@@ -854,42 +934,120 @@ function saveTask() {
   const binomeCode = document.getElementById('taskBinome').value;
   const recurrence = parseInt(document.getElementById('taskRecurrence').value) || 1;
   const urlValue = document.getElementById('taskUrl').value;
+  const noteText = document.getElementById('taskAdminNote').value;
+  const noteAuthor = state.isAdmin ? "Admin" : (state.user ? state.user.code : "Inconnu");
+  const isFullDay = document.getElementById('taskFullDay') && document.getElementById('taskFullDay').checked;
   
   const existingTask = id ? state.tasks.find(x => String(x.id) === String(id)) : null;
 
   const baseData = {
     type: type, content: type === 'Absence' ? document.getElementById('absenceVal').value : document.getElementById('taskContent').value,
     location: document.getElementById('taskLocation').value, time: document.getElementById('taskTime').value,
-    prestations: document.getElementById('taskPrestations').value, url: urlValue, bg: selectedBg, textColor: selectedTextColor, position: Date.now()
+    prestations: document.getElementById('taskPrestations').value, url: urlValue, bg: selectedBg, textColor: selectedTextColor, position: existingTask ? existingTask.position : Date.now()
   };
 
-  if (id) {
-    if (existingTask && existingTask.groupId) state.tasks = state.tasks.filter(t => String(t.groupId) !== String(existingTask.groupId));
-    else state.tasks = state.tasks.filter(t => String(t.id) !== String(id));
-    
-    baseData.date = existingTask.date;
-    baseData.period = existingTask.period;
-    
-    state.tasks.push({ ...baseData, id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), collab: document.getElementById('taskCollab').value, groupId: binomeCode ? String(groupId) : null });
-    if (binomeCode && type !== 'Absence') state.tasks.push({ ...baseData, id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), collab: binomeCode, groupId: String(groupId) });
-  } else {
-    const originalDateObj = new Date(modal.dataset.date);
-    const isRecurrentType = (type === 'Intervention site' || type === 'Réunion');
-    const loops = isRecurrentType ? recurrence : 1;
+  let tasksToUpdateNotes = [];
+  let baseDateStr = modal.dataset.date;
+  let basePeriod = modal.dataset.period;
 
-    for(let i = 0; i < loops; i++) {
-        let currentRecurrenceDate = new Date(originalDateObj);
-        currentRecurrenceDate.setDate(currentRecurrenceDate.getDate() + (i * 7)); 
-        let dateStr = getLocalDateString(currentRecurrenceDate);
-        let recGroupId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
-        
-        baseData.date = dateStr;
-        baseData.period = modal.dataset.period;
-        
-        state.tasks.push({ ...baseData, id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), collab: document.getElementById('taskCollab').value, groupId: binomeCode ? String(recGroupId) : null });
-        if (binomeCode && type !== 'Absence') state.tasks.push({ ...baseData, id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), collab: binomeCode, groupId: String(recGroupId) });
+  if (id) {
+    baseDateStr = existingTask.date;
+    basePeriod = existingTask.period;
+
+    const otherHalfTask = state.tasks.find(t => t.date === existingTask.date && t.collab === existingTask.collab && t.period !== existingTask.period && t.type === existingTask.type && t.content === existingTask.content && t.id !== existingTask.id);
+
+    if (existingTask && existingTask.groupId) {
+        state.tasks.forEach(t => {
+            if(String(t.groupId) === String(existingTask.groupId) && String(t.id) !== String(id)) {
+                db.ref('planning/notes/' + t.id).remove();
+                delete state.notes[t.id];
+            }
+        });
+        state.tasks = state.tasks.filter(t => String(t.groupId) !== String(existingTask.groupId));
+    }
+    state.tasks = state.tasks.filter(t => String(t.id) !== String(id));
+
+    if (otherHalfTask) {
+        if (otherHalfTask.groupId) {
+             state.tasks.forEach(t => {
+                if(String(t.groupId) === String(otherHalfTask.groupId) && String(t.id) !== String(otherHalfTask.id)) {
+                    db.ref('planning/notes/' + t.id).remove();
+                    delete state.notes[t.id];
+                }
+            });
+            state.tasks = state.tasks.filter(t => String(t.groupId) !== String(otherHalfTask.groupId));
+        }
+        state.tasks = state.tasks.filter(t => String(t.id) !== String(otherHalfTask.id));
+        db.ref('planning/notes/' + otherHalfTask.id).remove();
+        delete state.notes[otherHalfTask.id];
     }
   }
+
+  const originalDateObj = new Date(baseDateStr);
+  const isRecurrentType = (type === 'Intervention site' || type === 'Réunion');
+  const loops = isRecurrentType ? recurrence : 1;
+
+  let periodsToSave = [basePeriod];
+  if (isFullDay) { periodsToSave = ['Matin', 'Apr.Midi']; }
+
+  for(let i = 0; i < loops; i++) {
+      let currentRecurrenceDate = new Date(originalDateObj);
+      currentRecurrenceDate.setDate(currentRecurrenceDate.getDate() + (i * 7)); 
+      let dateStr = getLocalDateString(currentRecurrenceDate);
+      let recGroupId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
+      
+      periodsToSave.forEach(p => {
+          let newMainId;
+          if (id && i === 0 && p === basePeriod) {
+              newMainId = id; 
+          } else {
+              newMainId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
+          }
+
+          let currentTaskData = { ...baseData };
+          if (isFullDay && p === 'Apr.Midi') {
+              currentTaskData.time = "";
+              currentTaskData.location = "";
+          }
+
+          state.tasks.push({
+              ...currentTaskData,
+              id: newMainId,
+              date: dateStr,
+              period: p,
+              collab: document.getElementById('taskCollab').value,
+              groupId: binomeCode ? String(recGroupId) : null,
+              position: (existingTask && i===0 && p===basePeriod) ? existingTask.position : Date.now() + i
+          });
+          tasksToUpdateNotes.push(newMainId);
+
+          if (binomeCode && type !== 'Absence') {
+              let newBinomeId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9) + 'b';
+              state.tasks.push({
+                  ...currentTaskData,
+                  id: newBinomeId,
+                  date: dateStr,
+                  period: p,
+                  collab: binomeCode,
+                  groupId: String(recGroupId),
+                  position: (existingTask && i===0 && p===basePeriod) ? existingTask.position : Date.now() + i
+              });
+              tasksToUpdateNotes.push(newBinomeId);
+          }
+      });
+  }
+
+  tasksToUpdateNotes.forEach(tId => {
+      if (noteText.trim() !== "") {
+          state.notes[tId] = { text: noteText, author: noteAuthor };
+          db.ref('planning/notes/' + tId).set(state.notes[tId]);
+      } else {
+          if(state.notes[tId]) {
+              delete state.notes[tId];
+              db.ref('planning/notes/' + tId).remove();
+          }
+      }
+  });
 
   sync(); closeModal('taskModal');
   showToast("💾 Enregistré");
@@ -902,6 +1060,9 @@ function handleZoom(val) { if(val == 1) document.body.classList.add('zoom-out');
 function selectColor(opt) { document.querySelectorAll('.color-option').forEach(o => o.classList.remove('selected')); opt.classList.add('selected'); selectedBg = opt.dataset.bg; selectedTextColor = opt.dataset.text; }
 
 function prepareForNewTask() { 
+    document.getElementById('taskBinome').value = ''; 
+    document.getElementById('addBinomeBtn').style.display = 'block';
+    document.getElementById('taskBinome').style.display = 'none';
     document.getElementById('editTaskId').value = ''; 
     document.getElementById('taskGroupId').value = ''; 
     document.getElementById('taskContent').value = ''; 
@@ -909,7 +1070,9 @@ function prepareForNewTask() {
     document.getElementById('taskPrestations').value = ''; 
     document.getElementById('taskTime').value = ''; 
     document.getElementById('taskUrl').value = ''; 
+    document.getElementById('taskAdminNote').value = ''; 
     document.getElementById('taskRecurrence').value = '1'; 
+    if(document.getElementById('taskFullDay')) document.getElementById('taskFullDay').checked = false;
     toggleType(); 
 }
 
@@ -967,22 +1130,41 @@ function openConsultationTask(task) {
         </div>`);
     }
     
-    document.getElementById('consultNoteTaskId').value = task.id;
-    document.getElementById('consultNoteArea').value = state.notes && state.notes[task.id] ? state.notes[task.id] : "";
+    const noteData = state.notes && state.notes[task.id];
+    const nTxt = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
     
+    document.getElementById('consultNoteTaskId').value = task.id;
+    document.getElementById('consultNoteArea').value = nTxt;
+    
+    const hideConsultNote = (task.type === 'Absence' && (task.content === 'CP' || task.content === 'FÉRIÉ'));
+    document.getElementById('consultNoteContainer').style.display = hideConsultNote ? 'none' : 'block';
+
     document.getElementById('viewModal').classList.add('open'); 
 }
 
 function saveNote() {
     const taskId = document.getElementById('consultNoteTaskId').value;
     const noteText = document.getElementById('consultNoteArea').value;
-    
-    db.ref('planning/notes/' + taskId).set(noteText).then(() => {
-        showToast("📝 Note enregistrée");
-        closeModal('viewModal');
-    }).catch(err => {
-        alert("Erreur de sauvegarde de la note. Vos règles Firebase sont-elles à jour ?");
+    const noteAuthor = state.user ? state.user.code : "Inconnu";
+
+    const task = state.tasks.find(t => String(t.id) === String(taskId));
+    let tasksToUpdate = [taskId];
+
+    if (task && task.groupId) {
+        const groupTasks = state.tasks.filter(t => String(t.groupId) === String(task.groupId));
+        tasksToUpdate = groupTasks.map(t => t.id);
+    }
+
+    tasksToUpdate.forEach(tId => {
+        if (noteText.trim() === "") {
+            db.ref('planning/notes/' + tId).remove();
+        } else {
+            db.ref('planning/notes/' + tId).set({ text: noteText, author: noteAuthor });
+        }
     });
+
+    showToast(noteText.trim() === "" ? "📝 Note supprimée" : "📝 Note enregistrée");
+    closeModal('viewModal');
 }
 
 function openModalTask(task) {
@@ -990,6 +1172,10 @@ function openModalTask(task) {
   modal.dataset.date = task.date; 
   modal.dataset.period = task.period;
   
+  document.getElementById('taskBinome').value = ''; 
+  document.getElementById('addBinomeBtn').style.display = 'block';
+  document.getElementById('taskBinome').style.display = 'none';
+
   document.getElementById('editTaskId').value = task.id || '';
   document.getElementById('taskGroupId').value = task.groupId || '';
   document.getElementById('taskCollab').value = task.collab;
@@ -1001,13 +1187,19 @@ function openModalTask(task) {
   document.getElementById('taskType').value = task.type || 'Intervention site';
   document.getElementById('taskRecurrence').value = '1';
   
+  const otherHalfTask = state.tasks.find(t => t.date === task.date && t.collab === task.collab && t.period !== task.period && t.type === task.type && t.content === task.content && t.id !== task.id);
+  if(document.getElementById('taskFullDay')) {
+      document.getElementById('taskFullDay').checked = !!otherHalfTask;
+  }
+
+  const noteData = state.notes && state.notes[task.id];
+  document.getElementById('taskAdminNote').value = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : '';
+  
   if (task.id) {
     selectedBg = task.bg; selectedTextColor = task.textColor;
     document.querySelectorAll('.color-option').forEach(o => { o.classList.toggle('selected', o.dataset.bg === selectedBg); });
   }
 
-  document.getElementById('addBinomeBtn').style.display = 'block';
-  document.getElementById('taskBinome').style.display = 'none';
   if (task.groupId) {
     const other = state.tasks.find(t => String(t.groupId) === String(task.groupId) && t.collab !== task.collab);
     if (other) { showBinomeSelect(); document.getElementById('taskBinome').value = other.collab; }
@@ -1049,7 +1241,6 @@ function toggleType() {
     const t = document.getElementById('taskType').value; 
     const isAbs = t === 'Absence'; 
     const isBureau = t === 'Réalisation bureau'; 
-    const isEdit = document.getElementById('editTaskId').value !== '';
 
     document.getElementById('binomeSection').style.display = isAbs ? 'none' : 'block'; 
     document.getElementById('groupTime').style.display = (t === 'Intervention site' || t === 'Réunion') ? 'block' : 'none'; 
@@ -1060,9 +1251,34 @@ function toggleType() {
     document.getElementById('groupColors').style.display = (isAbs || t.includes('Envoi') || t === 'Réunion') ? 'none' : 'block'; 
     document.getElementById('groupUrl').style.display = isAbs ? 'none' : 'block'; 
     
-    document.getElementById('groupRecurrence').style.display = (!isEdit && (t === 'Intervention site' || t === 'Réunion')) ? 'block' : 'none';
+    document.getElementById('groupRecurrence').style.display = (t === 'Intervention site' || t === 'Réunion') ? 'block' : 'none';
+
+    // Gestion de la case "Toute la journée"
+    const wrapper = document.getElementById('fullDayWrapper');
+    wrapper.style.display = 'block';
+    if (t === 'Intervention site' || t === 'Réunion') {
+        wrapper.className = 'collab-block';
+        document.getElementById('fullDayLabel').style.height = '34px';
+        document.getElementById('fullDayLabel').style.marginTop = '20px';
+        document.getElementById('timeRow').appendChild(wrapper);
+    } else if (t === 'Absence') {
+        wrapper.className = 'form-group';
+        document.getElementById('fullDayLabel').style.height = 'auto';
+        document.getElementById('fullDayLabel').style.marginTop = '10px';
+        document.getElementById('groupAbsence').parentNode.insertBefore(wrapper, document.getElementById('groupAbsence').nextSibling);
+    } else {
+        wrapper.className = 'form-group';
+        document.getElementById('fullDayLabel').style.height = 'auto';
+        document.getElementById('fullDayLabel').style.marginTop = '10px';
+        document.getElementById('groupContent').parentNode.insertBefore(wrapper, document.getElementById('groupContent').nextSibling);
+    }
 
     const pV = document.querySelector('.palette-vivid'); pV.style.display = isBureau ? 'none' : 'grid'; 
+
+    // Gestion de la Note Admin (Masquage si CP ou FERIE)
+    const absVal = document.getElementById('absenceVal').value;
+    const hideAdminNote = (t === 'Absence' && (absVal === 'CP' || absVal === 'FÉRIÉ'));
+    document.getElementById('groupAdminNote').style.display = hideAdminNote ? 'none' : 'block';
 }
 
 function moveCollab(index, dir, e) { e.stopPropagation(); let list = getSortedCollabs(); const nIdx = index + dir; if (nIdx >= 0 && nIdx < list.length) { [list[index], list[nIdx]] = [list[nIdx], list[index]]; state.customOrder = list.map(c => c.code); localStorage.setItem('hru_order', JSON.stringify(state.customOrder)); openFavModal(); renderPlanning(); } }
