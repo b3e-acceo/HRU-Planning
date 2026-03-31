@@ -50,7 +50,7 @@
   body.zoom-out .planning-table th:not(.col-date-header):not(.col-period-header) { width: auto !important; padding: 4px 2px; }
   body.zoom-out .planning-table td:not(.col-date):not(.col-period) { width: auto !important; height: 22px; min-height: 22px; }
   body.zoom-out .task-item { padding: 1px 3px; font-size: 9px; border-left-width: 2px; }
-  body.zoom-out .task-location, body.zoom-out .task-time-inline { display: none; }
+  body.zoom-out .task-location, body.zoom-out .task-time-inline, body.zoom-out .task-url-btn { display: none; }
   body.zoom-out .th-name { display: none; }
   body.zoom-out .th-tri { font-size: 11px; margin-bottom: 0; }
   body.zoom-out .week-row-head { height: 22px !important; font-size: 9px; line-height: 22px; }
@@ -129,16 +129,17 @@
   
   .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 2000; }
   .modal-overlay.open { display: flex; }
-  .modal { background: var(--surface); padding: 25px; border-radius: 12px; width: 550px; box-shadow: var(--shadow-lg); position: relative; max-height: 90vh; overflow-y: auto;}
   
-  .form-group { margin-bottom: 18px; }
-  .form-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 6px; }
-  .form-input { width: 100%; padding: 10px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; }
-  .btn-group { display: flex; justify-content: space-between; gap: 8px; margin-top: 25px; }
+  /* --- MODAL PLUS COMPACTE --- */
+  .modal { background: var(--surface); padding: 20px; border-radius: 12px; width: 550px; box-shadow: var(--shadow-lg); position: relative; max-height: 95vh; overflow-y: auto;}
+  .form-group { margin-bottom: 10px; }
+  .form-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px; }
+  .form-input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 12px; }
+  .btn-group { display: flex; justify-content: space-between; gap: 8px; margin-top: 15px; }
 
-  .collab-flex { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 18px; }
+  .collab-flex { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 10px; }
   .collab-block { flex: 1; }
-  .add-binome-btn { background: var(--accent-light); color: var(--accent); border: 1px dashed var(--accent); padding: 8px; border-radius: 4px; font-weight: bold; font-size: 10px; width: 100%; cursor: pointer; }
+  .add-binome-btn { background: var(--accent-light); color: var(--accent); border: 1px dashed var(--accent); padding: 6px; border-radius: 4px; font-weight: bold; font-size: 10px; width: 100%; cursor: pointer; }
 
   .collab-list-item, .trash-list-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); cursor: pointer; }
   .move-btn, .restore-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; width: 28px; height: 26px; cursor: pointer; }
@@ -148,9 +149,9 @@
   .view-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
   .view-value { font-size: 14px; color: var(--text); padding: 8px; background: var(--surface2); border-radius: 4px; border-left: 4px solid var(--accent); white-space: pre-wrap; word-break: break-word; }
 
-  .color-picker { display: flex; flex-direction: column; gap: 12px; margin-top: 5px; }
-  .palette-light, .palette-vivid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; width: 100%; }
-  .color-option { width: 100%; aspect-ratio: 1 / 1; max-width: 32px; margin: 0 auto; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .color-picker { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+  .palette-light, .palette-vivid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; width: 100%; }
+  .color-option { width: 100%; aspect-ratio: 1 / 1; max-width: 28px; margin: 0 auto; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
   .color-option.selected { border-color: #1a1a18; transform: scale(1.1); box-shadow: 0 0 0 1px white inset; }
 
   .stats-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
@@ -294,29 +295,29 @@
 
 <div class="modal-overlay" id="trashModal">
   <div class="modal">
-    <h3>Corbeille (48h)</h3>
-    <div id="trashList" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; margin-top:10px"></div>
+    <h3 style="margin-bottom:10px;">Corbeille (48h)</h3>
+    <div id="trashList" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:4px;"></div>
     <div class="btn-group">
-        <button onclick="emptyTrash()" style="width:48%; background:#fceae8; color:var(--red); border:none; padding:12px; border-radius:6px; cursor:pointer; font-weight:700;">VIDER</button>
-        <button onclick="closeModal('trashModal')" style="width:48%; border:none; padding:12px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button>
+        <button onclick="emptyTrash()" style="width:48%; background:#fceae8; color:var(--red); border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700;">VIDER</button>
+        <button onclick="closeModal('trashModal')" style="width:48%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button>
     </div>
   </div>
 </div>
 
 <div class="modal-overlay" id="viewModal">
   <div class="modal">
-    <h3 style="margin-bottom:20px;">Détails de la tâche</h3>
+    <h3 style="margin-bottom:15px;">Détails de la tâche</h3>
     <div id="viewContentArea"></div>
     
-    <div style="margin-top: 20px; border-top: 1px solid var(--border); padding-top: 15px;">
+    <div style="margin-top: 15px; border-top: 1px solid var(--border); padding-top: 10px;">
         <label class="form-label">📝 NOTE DE RETOUR (COMPTE RENDU)</label>
         <textarea id="consultNoteArea" class="form-input" rows="3" placeholder="Ajouter un compte rendu de l'intervention ou une information..."></textarea>
         <input type="hidden" id="consultNoteTaskId">
     </div>
 
     <div class="btn-group">
-        <button onclick="closeModal('viewModal')" style="width:48%; border:none; border-radius:6px; cursor:pointer; font-weight:700; height:45px; background:var(--surface2); color:var(--text);">FERMER</button>
-        <button onclick="saveNote()" style="width:48%; border:none; border-radius:6px; cursor:pointer; font-weight:700; height:45px; background:var(--green-hru); color:white;">💾 SAUVER NOTE</button>
+        <button onclick="closeModal('viewModal')" style="width:48%; border:none; border-radius:6px; cursor:pointer; font-weight:700; padding:10px; background:var(--surface2); color:var(--text);">FERMER</button>
+        <button onclick="saveNote()" style="width:48%; border:none; border-radius:6px; cursor:pointer; font-weight:700; padding:10px; background:var(--green-hru); color:white;">💾 SAUVER NOTE</button>
     </div>
   </div>
 </div>
@@ -331,15 +332,15 @@
             <tbody id="statsBody"></tbody>
         </table>
     </div>
-    <div class="btn-group"><button onclick="closeModal('statsModal')" style="width:100%; border:none; padding:12px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button></div>
+    <div class="btn-group"><button onclick="closeModal('statsModal')" style="width:100%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button></div>
   </div>
 </div>
 
 <div class="modal-overlay" id="taskModal">
   <div class="modal">
-    <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 15px;">
-        <h3 id="modalTitle">Gérer la tâche</h3>
-        <button id="btnNewTaskInside" onclick="prepareForNewTask()" style="background:var(--green-hru); color:white; border:none; padding:5px 12px; border-radius:4px; font-weight:bold; font-size:10px; cursor:pointer;">+ AJOUT NOUV. TÂCHE</button>
+    <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+        <h3 id="modalTitle" style="margin:0;">Gérer la tâche</h3>
+        <button id="btnNewTaskInside" onclick="prepareForNewTask()" style="background:var(--green-hru); color:white; border:none; padding:4px 10px; border-radius:4px; font-weight:bold; font-size:10px; cursor:pointer;">+ AJOUT NOUV. TÂCHE</button>
     </div>
     <input type="hidden" id="editTaskId">
     <input type="hidden" id="taskGroupId">
@@ -361,19 +362,21 @@
     </div>
     
     <div class="form-group" id="groupLocation" style="display:none"><label class="form-label">Lieu / Adresse</label><input type="text" id="taskLocation" class="form-input"></div>
-    <div class="form-group" id="groupPrestations" style="display:none"><label class="form-label">Détail des prestations</label><textarea id="taskPrestations" class="form-input" rows="3"></textarea></div>
+    <div class="form-group" id="groupPrestations" style="display:none"><label class="form-label">Détail des prestations</label><textarea id="taskPrestations" class="form-input" rows="2"></textarea></div>
     <div class="form-group" id="groupAbsence" style="display:none"><label class="form-label">Type d'absence</label><select id="absenceVal" class="form-input"><option value="CP">CP</option><option value="FÉRIÉ">FÉRIÉ</option><option value="FORMATION">FORMATION</option></select></div>
     
     <div class="form-group" id="groupUrl"><label class="form-label">Chemin du dossier serveur</label><input type="text" id="taskUrl" class="form-input" placeholder="ex: Z:\Dossiers\HRU\..."></div>
 
-    <div class="btn-group"><button onclick="deleteTask()" id="btnDel" style="background:#fceae8; color:var(--red); border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">🗑️ SUPPRIMER</button><button onclick="copyToClipboard()" id="btnCopy" style="background:#546e7a; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">📋 COPIER</button><button onclick="closeModal('taskModal')" style="background:var(--surface2); color:var(--text); border:1px solid var(--border); padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">✖ ANNULER</button><button onclick="saveTask()" style="background:var(--accent); color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">💾 ENREGISTRER</button></div>
+    <div class="btn-group">
+        <button onclick="deleteTask()" id="btnDel" style="background:#fceae8; color:var(--red); border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🗑️ SUPPRIMER</button>
+        <button onclick="copyToClipboard()" id="btnCopy" style="background:#546e7a; color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;">📋 COPIER</button>
+        <button onclick="closeModal('taskModal')" style="background:var(--surface2); color:var(--text); border:1px solid var(--border); padding:8px; border-radius:4px; font-weight:bold; cursor:pointer; margin-left:auto;">✖ ANNULER</button>
+        <button onclick="saveTask()" style="background:var(--accent); color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">💾 ENREGISTRER</button>
+    </div>
   </div>
 </div>
 
 <script>
-// --- MOT DE PASSE ADMINISTRATEUR ---
-const ADMIN_PASSWORD = "admin";
-
 // --- CONFIGURATION FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyC7J3asi5nSK52LmRiYfhhoW6W46KqArZY",
@@ -400,6 +403,7 @@ firebase.auth().onAuthStateChanged((user) => {
 const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
 let selectedBg = "#E8EEF5", selectedTextColor = "#1A4373", draggedTaskId = null, clipboardTask = null;
 let taskHistory = []; 
+let redoHistory = []; // GESTION DU CTRL+Y
 let state = { user: null, isAdmin: false, collabs: DEFAULT_COLLABS, tasks: [], trash: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
 
 db.ref('planning').on('value', (snapshot) => {
@@ -418,8 +422,12 @@ db.ref('planning').on('value', (snapshot) => {
 });
 
 function sync() { 
+    // Sécurité anti-undefined pour Firebase : on nettoie l'objet en passant par JSON
+    const cleanTasks = JSON.parse(JSON.stringify(state.tasks));
+    const cleanTrash = JSON.parse(JSON.stringify(state.trash));
+
     db.ref('planning').update({ 
-        tasks: state.tasks, collabs: state.collabs, years: state.years, trash: state.trash, config: state.config 
+        tasks: cleanTasks, collabs: state.collabs, years: state.years, trash: cleanTrash, config: state.config 
     }).catch(err => {
         alert("Erreur de sécurité : Seul l'Administrateur peut modifier le planning central.");
         console.error(err);
@@ -429,15 +437,28 @@ function sync() {
 function saveHistory() {
     taskHistory.push(JSON.stringify(state.tasks));
     if(taskHistory.length > 20) taskHistory.shift(); 
+    redoHistory = []; // Reset du redo si nouvelle action
 }
 
 function undoAction() {
     if(taskHistory.length > 0) {
+        redoHistory.push(JSON.stringify(state.tasks));
         state.tasks = JSON.parse(taskHistory.pop());
         sync();
         showToast("⟲ Action annulée");
     } else {
         showToast("Rien à annuler");
+    }
+}
+
+function redoAction() {
+    if(redoHistory.length > 0) {
+        taskHistory.push(JSON.stringify(state.tasks));
+        state.tasks = JSON.parse(redoHistory.pop());
+        sync();
+        showToast("⟳ Action rétablie");
+    } else {
+        showToast("Rien à rétablir");
     }
 }
 
@@ -457,9 +478,16 @@ if(localStorage.getItem('hru_darkmode') === 'true') document.body.classList.add(
 window.addEventListener('keydown', (e) => { 
     const isInputFocused = document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA';
 
-    if ((e.ctrlKey || e.metaKey) && e.key === 'z') { 
+    // Raccourci Annuler (Ctrl+Z) / Rétablir (Ctrl+Shift+Z)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
         if (isInputFocused) return; 
-        e.preventDefault(); undoAction(); 
+        e.preventDefault(); 
+        if(e.shiftKey) redoAction(); else undoAction(); 
+    }
+    // Raccourci Rétablir (Ctrl+Y)
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { 
+        if (isInputFocused) return; 
+        e.preventDefault(); redoAction(); 
     }
     
     if (e.key === "Escape") { 
@@ -714,6 +742,7 @@ function renderPlanning() {
                 
                 let dayTasksRaw = state.tasks.filter(t => t.date === dStr && t.period === p && t.collab === c.code).sort((a,b) => (a.position || 0) - (b.position || 0));
                 
+                // Filtre d'affichage
                 let dayTasks = dayTasksRaw;
                 if(filterType === "prod") dayTasks = dayTasksRaw.filter(t => t.type !== "Absence");
                 if(filterType === "abs") dayTasks = dayTasksRaw.filter(t => t.type === "Absence");
@@ -794,6 +823,26 @@ function pasteTask(date, period, collab) {
   state.tasks.push({ ...clipboardTask, id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), date: date, period: period, collab: collab, position: Date.now() }); 
   sync();
   showToast("📋 Collé"); 
+}
+
+function copyToClipboard() { 
+    const currentId = document.getElementById('editTaskId').value; 
+    const task = state.tasks.find(t => String(t.id) === String(currentId)); 
+    if (task) { 
+        clipboardTask = { 
+            type: task.type || 'Intervention site', 
+            content: task.content || '', 
+            location: task.location || '', 
+            time: task.time || '', 
+            prestations: task.prestations || '', 
+            url: task.url || '', 
+            bg: task.bg || selectedBg, 
+            textColor: task.textColor || selectedTextColor 
+        }; 
+        closeModal('taskModal'); 
+        document.getElementById('clipboardBar').style.display = 'flex'; 
+        showToast("📋 Tâche copiée"); 
+    } 
 }
 
 function saveTask() {
@@ -914,7 +963,7 @@ function openConsultationTask(task) {
     if(task.url) {
         addField("Dossier Serveur", `<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
             <code style="background:var(--bg); padding:4px 8px; border-radius:4px; font-size:11px; word-break:break-all; border:1px solid var(--border);">${task.url}</code>
-            <button onclick="copyPath(event, this)" data-path="${task.url.replace(/"/g, '&quot;')}" style="border:none; background:var(--accent); color:white; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">COPIER LE CHEMIN</button>
+            <button onclick="copyPath(event, this)" data-path="${task.url.replace(/"/g, '&quot;')}" style="border:none; background:var(--accent); color:white; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">COPIER</button>
         </div>`);
     }
     
@@ -1038,7 +1087,6 @@ function handleInvert(targetId) {
     sync(); draggedTaskId = null; 
 }
 
-function copyToClipboard() { const currentId = document.getElementById('editTaskId').value; const task = state.tasks.find(t => String(t.id) === String(currentId)); if (task) { clipboardTask = { type: task.type, content: task.content, location: task.location, time: task.time, prestations: task.prestations, url: task.url, bg: task.bg, textColor: task.textColor }; closeModal('taskModal'); document.getElementById('clipboardBar').style.display = 'flex'; showToast("📋 Tâche copiée"); } }
 function getLocalDateString(date) { let d = new Date(date); let m = '' + (d.getMonth() + 1); let dy = '' + d.getDate(); if (m.length < 2) m = '0' + m; if (dy.length < 2) dy = '0' + dy; return [d.getFullYear(), m, dy].join('-'); }
 
 init();
