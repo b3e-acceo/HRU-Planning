@@ -226,7 +226,6 @@
         <div id="adminAuthError" style="color: var(--red); font-size: 11px; margin-top: 8px; display: none; font-weight:bold;">Erreur</div>
     </div>
 
-    <button class="login-btn" onclick="doLogin()">Se connecter au Planning</button>
   </div>
 </div>
 
@@ -243,7 +242,7 @@
         <div id="userInfo" style="font-size:11px; opacity:0.8;"></div>
         <button onclick="window.print()" style="padding:6px 12px; cursor:pointer; background:#ffffff; border:none; border-radius:4px; font-size:10px; font-weight:bold; color:#1a1a18;">🖨️ PDF</button>
         <button id="exportBtn" onclick="exportData()" style="padding:6px 12px; cursor:pointer; background:rgba(255,255,255,0.2); border:1px solid white; border-radius:4px; font-size:10px; font-weight:bold; color:white; display:none;">💾 EXPORTER</button>
-        <button onclick="location.reload()" style="padding:4px 10px; cursor:pointer; background:rgba(255,255,255,0.2); border:none; color:white; border-radius:4px;">✖</button>
+        <button onclick="logoutApp()" style="padding:4px 10px; cursor:pointer; background:rgba(255,255,255,0.2); border:none; color:white; border-radius:4px;" title="Se déconnecter">✖</button>
     </div>
   </div>
 
@@ -429,40 +428,61 @@ let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], con
 // ECOUTEUR DE SESSION FIREBASE AUTH
 firebase.auth().onAuthStateChanged((user) => {
     if (user) {
-        // Détecter si on est sur le compte "admin@..." ou un collab
         if (user.email && user.email.startsWith('admin@')) {
             state.isAdmin = true;
             const toggle = document.getElementById('adminToggle');
             if(toggle) toggle.classList.add('selected');
+            checkAutoLogin();
+        } else {
+            state.isAdmin = false;
+            if (!state.user && user.email) {
+                const code = user.email.split('@')[0].toUpperCase();
+                const tryLogin = setInterval(() => {
+                    if(state.collabs && state.collabs.length > 0) {
+                        const found = state.collabs.find(c => c.code === code);
+                        if (found) {
+                            state.user = found;
+                            checkAutoLogin();
+                        }
+                        clearInterval(tryLogin);
+                    }
+                }, 50);
+            }
         }
-        // Si l'utilisateur est déjà dans l'app, on actualise
-        if (document.getElementById('app').classList.contains('visible')) {
-            doLogin();
-        }
-    } else {
-        state.isAdmin = false;
-        const toggle = document.getElementById('adminToggle');
-        if(toggle) toggle.classList.remove('selected');
     }
 });
+
+const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
+let dataLoaded = false;
 
 db.ref('planning').on('value', (snapshot) => {
     const data = snapshot.val();
     if (data) {
         state.tasks = data.tasks ? (Array.isArray(data.tasks) ? data.tasks : Object.values(data.tasks)) : [];
-        state.collabs = data.collabs ? (Array.isArray(data.collabs) ? data.collabs : Object.values(data.collabs)) : [];
+        state.collabs = data.collabs ? (Array.isArray(data.collabs) ? data.collabs : Object.values(data.collabs)) : DEFAULT_COLLABS;
         state.years = data.years ? (Array.isArray(data.years) ? data.years : Object.values(data.years)) : [2026, 2027];
         state.trash = data.trash ? (Array.isArray(data.trash) ? data.trash : Object.values(data.trash)) : [];
         state.config = data.config || { lockPast: false };
         state.notes = data.notes || {};
+        dataLoaded = true;
         updateLockBtnUI();
-        init(); // Maj de la grille
+        init(); 
         if (document.getElementById('app').classList.contains('visible')) {
-            renderPlanning();
-            renderYearTabs();
+            doLogin(); 
+        } else {
+            checkAutoLogin();
         }
+    } else {
+        dataLoaded = true;
+        init();
     }
 });
+
+function checkAutoLogin() {
+    if(dataLoaded && (state.isAdmin || state.user) && !document.getElementById('app').classList.contains('visible')) {
+        doLogin();
+    }
+}
 
 function sync() { 
     const cleanTasks = JSON.parse(JSON.stringify(state.tasks));
@@ -553,7 +573,8 @@ function init() {
     const grid = document.getElementById('profileGrid'); 
     if(!grid) return;
     grid.innerHTML = ""; 
-    state.collabs.forEach((c, index) => { 
+    const collabsToRender = state.collabs.length > 0 ? state.collabs : DEFAULT_COLLABS;
+    collabsToRender.forEach((c, index) => { 
         const btn = document.createElement('div'); btn.className = 'profile-btn'; 
         btn.id = `collab-btn-${index}`;
         btn.innerHTML = `
@@ -585,6 +606,7 @@ function handleAdminToggle() {
         if(confirm("Se déconnecter du mode Administrateur ?")) {
             firebase.auth().signOut().then(() => {
                 showToast("Déconnecté du mode Admin");
+                location.reload();
             });
         }
     } else {
@@ -595,11 +617,11 @@ function handleAdminToggle() {
     }
 }
 
-// ---> C'EST ICI QUE LE MOT DE PASSE DU COLLAB EST VÉRIFIÉ <---
 function loginCollab(index) {
-    const collab = state.collabs[index];
+    const collabsToUse = state.collabs.length > 0 ? state.collabs : DEFAULT_COLLABS;
+    const collab = collabsToUse[index];
     const pwd = document.getElementById(`pwd-input-${index}`).value;
-    const email = `${collab.code.toLowerCase()}@hru.fr`; // Fabrication de l'email
+    const email = `${collab.code.toLowerCase().trim()}@hru.fr`;
     const errDiv = document.getElementById('collabAuthError');
 
     if(!pwd) return;
@@ -608,7 +630,6 @@ function loginCollab(index) {
     .then((userCredential) => {
         state.user = collab;
         errDiv.style.display = 'none';
-        doLogin();
     })
     .catch((error) => {
         errDiv.textContent = "Mot de passe incorrect pour " + collab.name;
@@ -617,7 +638,7 @@ function loginCollab(index) {
 }
 
 function loginFirebaseAdmin() {
-    const email = document.getElementById('adminEmail').value;
+    const email = document.getElementById('adminEmail').value.trim();
     const pwd = document.getElementById('adminPwd').value;
     const errDiv = document.getElementById('adminAuthError');
 
@@ -630,7 +651,6 @@ function loginFirebaseAdmin() {
         showToast("Accès Admin accordé");
         document.getElementById('adminEmail').value = '';
         document.getElementById('adminPwd').value = '';
-        doLogin();
     })
     .catch((error) => {
         errDiv.textContent = "Email ou mot de passe incorrect.";
@@ -638,9 +658,18 @@ function loginFirebaseAdmin() {
     });
 }
 
+function logoutApp() {
+    firebase.auth().signOut().then(() => {
+        location.reload();
+    });
+}
+
 function doLogin() { 
+    const app = document.getElementById('app');
+    const wasVisible = app.classList.contains('visible');
+    
     document.getElementById('loginScreen').style.display = 'none'; 
-    document.getElementById('app').classList.add('visible'); 
+    app.classList.add('visible'); 
     
     const isEditor = state.user && state.user.isEditor;
 
@@ -686,13 +715,13 @@ function doLogin() {
     }
     
     const realCurrentYear = new Date().getFullYear();
-    if(state.years.includes(realCurrentYear)) {
+    if(state.years.includes(realCurrentYear) && !wasVisible) {
         state.currentYear = realCurrentYear;
     }
     
     renderYearTabs();
     renderPlanning(); 
-    setTimeout(scrollToToday, 600); 
+    if(!wasVisible) setTimeout(scrollToToday, 600); 
 }
 
 function openAccessModal() {
@@ -1355,7 +1384,6 @@ function handleInvert(targetId) {
 
 function getLocalDateString(date) { let d = new Date(date); let m = '' + (d.getMonth() + 1); let dy = '' + d.getDate(); if (m.length < 2) m = '0' + m; if (dy.length < 2) dy = '0' + dy; return [d.getFullYear(), m, dy].join('-'); }
 
-init();
 </script>
 </body>
 </html>
