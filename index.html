@@ -225,7 +225,6 @@
         <button onclick="loginFirebaseAdmin()" class="login-btn" style="padding: 10px; font-size: 12px; background:var(--orange);">Valider l'accès Admin</button>
         <div id="adminAuthError" style="color: var(--red); font-size: 11px; margin-top: 8px; display: none; font-weight:bold;">Erreur</div>
     </div>
-
   </div>
 </div>
 
@@ -406,7 +405,6 @@
 </div>
 
 <script>
-// --- CONFIGURATION FIREBASE ---
 const firebaseConfig = {
   apiKey: "AIzaSyC7J3asi5nSK52LmRiYfhhoW6W46KqArZY",
   authDomain: "planning-41168.firebaseapp.com",
@@ -425,35 +423,47 @@ let taskHistory = [];
 let redoHistory = []; 
 let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
 
-// ECOUTEUR DE SESSION FIREBASE AUTH
+// GESTION DE LA CONNEXION (Sécurisée)
 firebase.auth().onAuthStateChanged((user) => {
     if (user) {
         if (user.email && user.email.startsWith('admin@')) {
             state.isAdmin = true;
+            state.user = { name: "Administrateur", code: "Admin" };
             const toggle = document.getElementById('adminToggle');
             if(toggle) toggle.classList.add('selected');
-            checkAutoLogin();
+            doLogin();
         } else {
             state.isAdmin = false;
-            if (!state.user && user.email) {
-                const code = user.email.split('@')[0].toUpperCase();
-                const tryLogin = setInterval(() => {
-                    if(state.collabs && state.collabs.length > 0) {
-                        const found = state.collabs.find(c => c.code === code);
-                        if (found) {
-                            state.user = found;
-                            checkAutoLogin();
-                        }
-                        clearInterval(tryLogin);
-                    }
-                }, 50);
-            }
+            // On retrouve le collaborateur correspondant à l'e-mail
+            const code = user.email.split('@')[0].toUpperCase();
+            
+            const tryLogin = setInterval(() => {
+                const collabsList = state.collabs.length > 0 ? state.collabs : DEFAULT_COLLABS;
+                const found = collabsList.find(c => c.code === code);
+                if (found) {
+                    state.user = found;
+                    doLogin();
+                    clearInterval(tryLogin);
+                } else if (state.collabs.length > 0) {
+                    // Sécurité au cas où un profil a été supprimé entre temps
+                    state.user = { name: "Compte inconnu", code: code, isEditor: false };
+                    doLogin();
+                    clearInterval(tryLogin);
+                }
+            }, 50);
         }
+    } else {
+        state.isAdmin = false;
+        state.user = null;
+        document.getElementById('app').classList.remove('visible');
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('selected'));
+        const errDiv = document.getElementById('collabAuthError');
+        if(errDiv) errDiv.style.display = 'none';
     }
 });
 
 const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
-let dataLoaded = false;
 
 db.ref('planning').on('value', (snapshot) => {
     const data = snapshot.val();
@@ -464,25 +474,16 @@ db.ref('planning').on('value', (snapshot) => {
         state.trash = data.trash ? (Array.isArray(data.trash) ? data.trash : Object.values(data.trash)) : [];
         state.config = data.config || { lockPast: false };
         state.notes = data.notes || {};
-        dataLoaded = true;
         updateLockBtnUI();
-        init(); 
+        if(!state.user && !state.isAdmin) init(); // Maj grille de connexion
         if (document.getElementById('app').classList.contains('visible')) {
-            doLogin(); 
-        } else {
-            checkAutoLogin();
+            renderPlanning();
+            renderYearTabs();
         }
     } else {
-        dataLoaded = true;
         init();
     }
 });
-
-function checkAutoLogin() {
-    if(dataLoaded && (state.isAdmin || state.user) && !document.getElementById('app').classList.contains('visible')) {
-        doLogin();
-    }
-}
 
 function sync() { 
     const cleanTasks = JSON.parse(JSON.stringify(state.tasks));
@@ -601,36 +602,22 @@ function handleProfileSelect(btn, collab, index) {
 
 function handleAdminToggle() { 
     const authBlock = document.getElementById('adminAuthBlock');
-    
-    if (state.isAdmin) {
-        if(confirm("Se déconnecter du mode Administrateur ?")) {
-            firebase.auth().signOut().then(() => {
-                showToast("Déconnecté du mode Admin");
-                location.reload();
-            });
-        }
-    } else {
-        authBlock.style.display = authBlock.style.display === 'none' ? 'block' : 'none';
-        document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('selected'));
-        const errDiv = document.getElementById('collabAuthError');
-        if(errDiv) errDiv.style.display = 'none';
-    }
+    authBlock.style.display = authBlock.style.display === 'none' ? 'block' : 'none';
+    document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('selected'));
+    const errDiv = document.getElementById('collabAuthError');
+    if(errDiv) errDiv.style.display = 'none';
 }
 
 function loginCollab(index) {
     const collabsToUse = state.collabs.length > 0 ? state.collabs : DEFAULT_COLLABS;
     const collab = collabsToUse[index];
     const pwd = document.getElementById(`pwd-input-${index}`).value;
-    const email = `${collab.code.toLowerCase().trim()}@hru.fr`;
+    const email = `${collab.code.toLowerCase().trim()}@b3e.fr`;
     const errDiv = document.getElementById('collabAuthError');
 
     if(!pwd) return;
 
     firebase.auth().signInWithEmailAndPassword(email, pwd)
-    .then((userCredential) => {
-        state.user = collab;
-        errDiv.style.display = 'none';
-    })
     .catch((error) => {
         errDiv.textContent = "Mot de passe incorrect pour " + collab.name;
         errDiv.style.display = 'block';
@@ -645,10 +632,8 @@ function loginFirebaseAdmin() {
     if(!email || !pwd) { errDiv.textContent = "Veuillez remplir les deux champs."; errDiv.style.display = 'block'; return; }
 
     firebase.auth().signInWithEmailAndPassword(email, pwd)
-    .then((userCredential) => {
-        state.user = { name: "Administrateur", code: "Admin" };
+    .then(() => {
         errDiv.style.display = 'none';
-        showToast("Accès Admin accordé");
         document.getElementById('adminEmail').value = '';
         document.getElementById('adminPwd').value = '';
     })
@@ -659,9 +644,7 @@ function loginFirebaseAdmin() {
 }
 
 function logoutApp() {
-    firebase.auth().signOut().then(() => {
-        location.reload();
-    });
+    firebase.auth().signOut();
 }
 
 function doLogin() { 
@@ -899,6 +882,7 @@ function renderPlanning() {
                 
                 let dayTasksRaw = state.tasks.filter(t => t.date === dStr && t.period === p && t.collab === c.code).sort((a,b) => (a.position || 0) - (b.position || 0));
                 
+                // Filtre d'affichage
                 let dayTasks = dayTasksRaw;
                 if(filterType === "prod") dayTasks = dayTasksRaw.filter(t => t.type !== "Absence");
                 if(filterType === "abs") dayTasks = dayTasksRaw.filter(t => t.type === "Absence");
