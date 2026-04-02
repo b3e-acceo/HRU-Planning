@@ -76,7 +76,6 @@
   .admin-toggle.selected { border-color: var(--orange); background: var(--orange-light); }
   .login-btn { width: 100%; padding: 15px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
 
-  /* Bloc mot de passe dynamique */
   .pwd-prompt { display: none; width: 100%; margin-top: 8px; }
   .profile-btn.selected .pwd-prompt { display: flex; flex-direction: column; gap: 5px; }
 
@@ -116,9 +115,10 @@
   .task-item.dimmed, .cell-absence.dimmed { opacity: 0.1 !important; }
   .task-location { font-size: 9px; opacity: 0.8; font-weight: normal; margin-top: 2px; font-style: italic; }
   .task-time-inline { font-size: 9px; font-weight: bold; margin-top: 2px; opacity: 0.9; }
-  
-  .task-url-btn { display: inline-block; margin-top: 4px; font-size: 9px; background: rgba(0,0,0,0.15); padding: 3px 6px; border-radius: 4px; color: inherit; border: none; font-family: inherit; font-weight: bold; cursor: pointer; line-height: 1; }
-  .task-url-btn:hover { background: rgba(0,0,0,0.3); }
+
+  /* INFO-BULLE SUR MESURE */
+  #customTooltip { position: fixed; z-index: 9999; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow-lg); padding: 12px; border-radius: 8px; font-size: 11px; max-width: 280px; pointer-events: none; display: none; line-height: 1.4; transition: opacity 0.1s; }
+  body.dark-mode #customTooltip { background: var(--surface2); border-color: var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
 
   .type-intervention { font-weight: 800 !important; }
   .type-reunion { font-weight: 800 !important; background: var(--yellow-livrable) !important; color: #000000 !important; border-left-color: #000000 !important; }
@@ -185,13 +185,9 @@
     .stats-table th, .stats-table td { padding: 4px; font-size: 10px; }
     .zoom-container { display: none !important; }
   }
-  @media (max-width: 480px) {
-    .login-grid { grid-template-columns: repeat(2, 1fr); }
-  }
-
   @media print {
     body { background: white !important; font-size: 10px; }
-    .topbar, .planning-toolbar, .zoom-container, #loginScreen, .modal-overlay, #toastMsg { display: none !important; }
+    .topbar, .planning-toolbar, .zoom-container, #loginScreen, .modal-overlay, #toastMsg, #customTooltip { display: none !important; }
     #app { display: block !important; height: auto !important; }
     .planning-scroll { overflow: visible !important; height: auto !important; }
     .planning-table { width: 100% !important; page-break-inside: auto; border: 1px solid #000; }
@@ -204,6 +200,7 @@
 <body>
 
 <div id="toastMsg">Action effectuée</div>
+<div id="customTooltip"></div>
 
 <div id="loginScreen">
   <div class="login-box">
@@ -266,6 +263,7 @@
     
     <button class="fav-btn" onclick="openFavModal()">⭐ FAVORIS</button>
     <button class="stats-btn" id="accessBtn" onclick="openAccessModal()" style="display:none; background:var(--green-hru);">🔐 ACCÈS</button>
+    <button class="stats-btn" id="historyBtn" onclick="openHistoryModal()" style="display:none; background:#8e44ad;">📜 HISTO</button>
     <button class="stats-btn" id="statsBtn" onclick="openStatsModal()">📊 STATS</button>
     
     <div class="search-container">
@@ -291,6 +289,16 @@
       <thead id="planningHead"></thead>
       <tbody id="planningBody"></tbody>
     </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="historyModal">
+  <div class="modal" style="width:600px;">
+    <h3>Historique d'activité (100 dernières actions)</h3>
+    <div id="historyList" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; font-size:11px; padding:10px; line-height:1.5;"></div>
+    <div class="btn-group">
+        <button onclick="closeModal('historyModal')" style="width:100%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button>
+    </div>
   </div>
 </div>
 
@@ -418,16 +426,71 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// FORCER LA SESSION À EXPIRER À LA FERMETURE DU NAVIGATEUR
 firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
 
 let selectedBg = "#E8EEF5", selectedTextColor = "#1A4373", draggedTaskId = null, clipboardTask = null;
 let taskHistory = []; 
 let redoHistory = []; 
 let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
+let dataLoaded = false;
+let isInitialized = false;
+let currentYearListener = null;
 
-// ECOUTEUR DE SESSION FIREBASE AUTH
+const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
+
+// INITIALISATION ET MIGRATION AUTO DES DONNEES
+function initApp() {
+    if(isInitialized) return;
+    isInitialized = true;
+
+    db.ref('planning').once('value', (snap) => {
+        const data = snap.val() || {};
+        
+        // MIGRATION AUTOMATIQUE DES ANCIENNES TACHES VERS LE SYSTEME PAR ANNEE
+        if (data.tasks && Array.isArray(data.tasks)) {
+            let newTasksFormat = {};
+            data.tasks.forEach(t => {
+                if(!t) return;
+                let y = t.date ? t.date.split('-')[0] : '2026';
+                if(!newTasksFormat[y]) newTasksFormat[y] = [];
+                newTasksFormat[y].push(t);
+            });
+            let updates = { 'planning/tasks': null }; // supprime l'ancien gros bloc
+            for(let y in newTasksFormat) { updates['planning/tasks/' + y] = newTasksFormat[y]; }
+            db.ref().update(updates).then(startListeners);
+        } else {
+            startListeners();
+        }
+    });
+}
+
+function startListeners() {
+    db.ref('planning/collabs').on('value', s => { state.collabs = s.val() || DEFAULT_COLLABS; if(!state.user && !state.isAdmin) init(); else renderPlanning(); });
+    db.ref('planning/years').on('value', s => { state.years = s.val() || [2026, 2027]; renderYearTabs(); });
+    db.ref('planning/trash').on('value', s => { state.trash = s.val() ? Object.values(s.val()) : []; });
+    db.ref('planning/config').on('value', s => { state.config = s.val() || {lockPast:false}; updateLockBtnUI(); });
+    db.ref('planning/notes').on('value', s => { state.notes = s.val() || {}; renderPlanning(); });
+
+    loadTasksForYear(state.currentYear);
+}
+
+function loadTasksForYear(year) {
+    if (currentYearListener) db.ref(currentYearListener).off();
+    currentYearListener = `planning/tasks/${year}`;
+    db.ref(currentYearListener).on('value', s => {
+        let t = s.val();
+        state.tasks = t ? (Array.isArray(t) ? t : Object.values(t)) : [];
+        dataLoaded = true;
+        if (document.getElementById('app').classList.contains('visible')) {
+            renderPlanning();
+        } else {
+            checkAutoLogin();
+        }
+    });
+}
+
 firebase.auth().onAuthStateChanged((user) => {
+    initApp();
     if (user) {
         if (user.email && (user.email.toLowerCase() === 'nicolas.renault@acceo.eu' || user.email.startsWith('admin@'))) {
             state.isAdmin = true;
@@ -464,56 +527,63 @@ firebase.auth().onAuthStateChanged((user) => {
     }
 });
 
-const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
-let dataLoaded = false;
-
-db.ref('planning').on('value', (snapshot) => {
-    const data = snapshot.val();
-    if (data) {
-        state.tasks = data.tasks ? (Array.isArray(data.tasks) ? data.tasks : Object.values(data.tasks)) : [];
-        state.collabs = data.collabs ? (Array.isArray(data.collabs) ? data.collabs : Object.values(data.collabs)) : DEFAULT_COLLABS;
-        state.years = data.years ? (Array.isArray(data.years) ? data.years : Object.values(data.years)) : [2026, 2027];
-        state.trash = data.trash ? (Array.isArray(data.trash) ? data.trash : Object.values(data.trash)) : [];
-        state.config = data.config || { lockPast: false };
-        state.notes = data.notes || {};
-        dataLoaded = true;
-        updateLockBtnUI();
-        init(); 
-        if (document.getElementById('app').classList.contains('visible')) {
-            renderPlanning();
-            renderYearTabs();
-        } else {
-            checkAutoLogin();
-        }
-    } else {
-        dataLoaded = true;
-        init();
-    }
-});
-
 function checkAutoLogin() {
     if(dataLoaded && (state.isAdmin || state.user) && !document.getElementById('app').classList.contains('visible')) {
         doLogin();
     }
 }
 
-function sync() { 
-    const cleanTasks = JSON.parse(JSON.stringify(state.tasks));
-    const cleanTrash = JSON.parse(JSON.stringify(state.trash));
-
-    db.ref('planning').update({ 
-        tasks: cleanTasks, trash: cleanTrash
-    }).catch(err => {
-        alert("Erreur de synchronisation Firebase. Avez-vous mis à jour les règles ?");
-        console.error(err);
+// FONCTIONS DE SAUVEGARDE MODULAIRES
+function syncTasks() { 
+    // Gère le cas où une tâche récurrente déborderait sur l'année suivante
+    let tasksByYear = {};
+    state.tasks.forEach(t => {
+        if(!t || !t.date) return;
+        const y = t.date.split('-')[0];
+        if(!tasksByYear[y]) tasksByYear[y] = [];
+        tasksByYear[y].push(t);
     });
+
+    for(let y in tasksByYear) {
+        db.ref('planning/tasks/' + y).set(tasksByYear[y]);
+    }
+    state.tasks = tasksByYear[state.currentYear] || [];
+}
+
+function syncTrash() {
+    db.ref('planning/trash').set(JSON.parse(JSON.stringify(state.trash)));
 }
 
 function syncAdmin() {
     db.ref('planning').update({ 
         collabs: state.collabs, years: state.years, config: state.config 
-    }).catch(err => {
-        alert("Seul l'Administrateur peut modifier la configuration !");
+    }).catch(err => { alert("Seul l'Administrateur peut modifier la configuration !"); });
+}
+
+// SYSTEME DE TRACABILITE
+function logAction(actionStr, details) {
+    if(!state.isAdmin && (!state.user || !state.user.isEditor)) return;
+    const author = state.user ? state.user.code : 'Admin';
+    db.ref('planning/history').push({ ts: Date.now(), author: author, text: actionStr + (details ? ` : ${details}` : '') });
+}
+
+function openHistoryModal() {
+    const list = document.getElementById('historyList');
+    list.innerHTML = "Chargement...";
+    document.getElementById('historyModal').classList.add('open');
+    
+    db.ref('planning/history').orderByChild('ts').limitToLast(100).once('value', snap => {
+        list.innerHTML = "";
+        let items = [];
+        snap.forEach(child => { items.unshift(child.val()); }); 
+        if(items.length === 0) { list.innerHTML = "Aucune activité récente."; return; }
+        
+        items.forEach(i => {
+            let d = new Date(i.ts).toLocaleString('fr-FR');
+            list.innerHTML += `<div style="border-bottom:1px solid var(--border); padding:6px 0;">
+                <span style="color:var(--text-muted)">[${d}]</span> <b>${i.author}</b> a effectué : <i>${i.text}</i>
+            </div>`;
+        });
     });
 }
 
@@ -527,7 +597,7 @@ function undoAction() {
     if(taskHistory.length > 0) {
         redoHistory.push(JSON.stringify(state.tasks));
         state.tasks = JSON.parse(taskHistory.pop());
-        sync();
+        syncTasks();
         showToast("⟲ Action annulée");
     } else {
         showToast("Rien à annuler");
@@ -538,7 +608,7 @@ function redoAction() {
     if(redoHistory.length > 0) {
         taskHistory.push(JSON.stringify(state.tasks));
         state.tasks = JSON.parse(redoHistory.pop());
-        sync();
+        syncTasks();
         showToast("⟳ Action rétablie");
     } else {
         showToast("Rien à rétablir");
@@ -573,7 +643,8 @@ window.addEventListener('keydown', (e) => {
     
     if (e.key === "Escape") { 
         if (clipboardTask) cancelPasteMode();
-        closeModal('accessModal'); closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); closeModal('trashModal'); closeModal('statsModal');
+        hideTooltip();
+        closeModal('historyModal'); closeModal('accessModal'); closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); closeModal('trashModal'); closeModal('statsModal');
     } 
     
     if ((e.key === "Delete" || e.key === "Del") && document.getElementById('taskModal').classList.contains('open') && document.getElementById('editTaskId').value) { 
@@ -630,11 +701,8 @@ function loginCollab(index) {
 
     if(!pwd) return;
 
-    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
-    .then(() => firebase.auth().signInWithEmailAndPassword(email, pwd))
-    .then(() => {
-        pwdInput.value = '';
-    })
+    firebase.auth().signInWithEmailAndPassword(email, pwd)
+    .then(() => { pwdInput.value = ''; })
     .catch((error) => {
         errDiv.textContent = "Mot de passe incorrect pour " + collab.name;
         errDiv.style.display = 'block';
@@ -649,8 +717,7 @@ function loginFirebaseAdmin() {
 
     if(!email || !pwd) { errDiv.textContent = "Veuillez remplir les deux champs."; errDiv.style.display = 'block'; return; }
 
-    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
-    .then(() => firebase.auth().signInWithEmailAndPassword(email, pwd))
+    firebase.auth().signInWithEmailAndPassword(email, pwd)
     .then(() => {
         errDiv.style.display = 'none';
         document.getElementById('adminEmail').value = '';
@@ -678,6 +745,7 @@ function doLogin() {
     if(state.isAdmin) { 
         document.getElementById('userInfo').textContent = `🔧 Mode Admin (${state.user.name})`; 
         document.getElementById('accessBtn').style.display = 'block';
+        document.getElementById('historyBtn').style.display = 'block';
         document.getElementById('newCollabBtn').style.display = 'block'; 
         document.getElementById('delCollabBtn').style.display = 'block'; 
         document.getElementById('trashBtn').style.display = 'block'; 
@@ -691,6 +759,7 @@ function doLogin() {
     } else if(isEditor) {
         document.getElementById('userInfo').textContent = `📝 Mode Éditeur (${state.user.name})`; 
         document.getElementById('accessBtn').style.display = 'none';
+        document.getElementById('historyBtn').style.display = 'none';
         document.getElementById('newCollabBtn').style.display = 'none'; 
         document.getElementById('delCollabBtn').style.display = 'none'; 
         document.getElementById('trashBtn').style.display = 'block'; 
@@ -704,6 +773,7 @@ function doLogin() {
     } else {
         document.getElementById('userInfo').textContent = `👤 Mode Lecture (${state.user.name})`; 
         document.getElementById('accessBtn').style.display = 'none';
+        document.getElementById('historyBtn').style.display = 'none';
         document.getElementById('newCollabBtn').style.display = 'none'; 
         document.getElementById('delCollabBtn').style.display = 'none'; 
         document.getElementById('exportBtn').style.display = 'none';
@@ -768,20 +838,45 @@ function updateLockBtnUI() {
 
 function getSortedCollabs() { let list = [...state.collabs]; if (state.customOrder) { list.sort((a, b) => state.customOrder.indexOf(a.code) - state.customOrder.indexOf(b.code)); } if (state.favCollab) { const fav = list.find(c => c.code === state.favCollab); if (fav) list = [fav, ...list.filter(c => c.code !== state.favCollab)]; } return list; }
 
-function buildTooltip(task) {
-    let t = `Type : ${task.type}\n`;
-    t += `Description : ${task.content}\n`;
-    if(task.time) t += `Heure : ${task.time}\n`;
-    if(task.location) t += `Lieu : ${task.location}\n`;
-    if(task.prestations) t += `Prestations : ${task.prestations}\n`;
-    
+// --- INFO BULLE SUR MESURE ---
+function showTooltip(e, task) {
+    const tt = document.getElementById('customTooltip');
     const noteData = state.notes && state.notes[task.id];
-    if(noteData) {
-        const nTxt = typeof noteData === 'string' ? noteData : noteData.text;
-        const nAuth = typeof noteData === 'string' ? 'Inconnu' : noteData.author;
-        t += `\n📝 NOTE DE RETOUR (${nAuth}) :\n${nTxt}\n`;
+    const nTxt = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
+    const nAuth = noteData ? (typeof noteData === 'string' ? 'Inconnu' : noteData.author) : "";
+
+    const safeContent = (task.content || '').replace(/\n/g, '<br>');
+
+    let html = `<div style="text-transform:uppercase; font-size:9px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">${task.type}</div>`;
+    html += `<div style="font-size:12px; font-weight:bold; margin-bottom:6px;">${safeContent}</div>`;
+
+    if(task.time) html += `<div><b>⏰ Horaire:</b> ${task.time}</div>`;
+    if(task.location) html += `<div><b>📍 Lieu:</b> ${task.location}</div>`;
+    if(task.prestations) html += `<div style="margin-top:6px;"><b>Détail:</b><br>${task.prestations.replace(/\n/g, '<br>')}</div>`;
+
+    if(nTxt) {
+        html += `<div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
+            <div style="font-size:9px; font-weight:bold; color:var(--text-muted); margin-bottom:2px;">📝 NOTE DE RETOUR (${nAuth})</div>
+            <div style="font-style:italic;">${nTxt.replace(/\n/g, '<br>')}</div>
+        </div>`;
     }
-    return t;
+
+    tt.innerHTML = html;
+    tt.style.display = 'block';
+    moveTooltip(e);
+}
+function moveTooltip(e) {
+    const tt = document.getElementById('customTooltip');
+    if(tt.style.display === 'none') return;
+    let x = e.clientX + 15;
+    let y = e.clientY + 15;
+    if(x + tt.offsetWidth > window.innerWidth) x = e.clientX - tt.offsetWidth - 15;
+    if(y + tt.offsetHeight > window.innerHeight) y = e.clientY - tt.offsetHeight - 15;
+    tt.style.left = x + 'px';
+    tt.style.top = y + 'px';
+}
+function hideTooltip() {
+    document.getElementById('customTooltip').style.display = 'none';
 }
 
 function jumpToDate(val) {
@@ -885,7 +980,8 @@ function renderPlanning() {
                             } else {
                                 draggedTask.date = dStr; draggedTask.period = p; draggedTask.collab = c.code; draggedTask.position = Date.now();
                             }
-                            sync(); draggedTaskId = null; 
+                            syncTasks(); draggedTaskId = null; 
+                            logAction("Déplacement", draggedTask.content);
                         }
                     };
                 }
@@ -916,7 +1012,7 @@ function renderPlanning() {
                 dayTasks.forEach(task => {
                     const noteData = state.notes && state.notes[task.id];
                     const noteAuthor = noteData ? (typeof noteData === 'string' ? 'Inconnu' : noteData.author) : '';
-                    const noteIndicator = noteData ? `<div class="task-note-icon" title="Note par ${noteAuthor}">📝</div>` : '';
+                    const noteIndicator = noteData ? `<div class="task-note-icon">📝</div>` : '';
                     
                     const safeContent = (task.content || '').replace(/\n/g, '<br>');
 
@@ -924,23 +1020,20 @@ function renderPlanning() {
                         const div = document.createElement('div'); div.className = "cell-absence"; 
                         div.innerHTML = `<span>${safeContent}</span>${noteIndicator}`;
                         
-                        let absTitle = "Absence : " + task.content;
-                        if (noteData) {
-                            const nTxt = typeof noteData === 'string' ? noteData : noteData.text;
-                            absTitle += `\n\n📝 NOTE (${noteAuthor}) :\n${nTxt}`;
-                        }
-                        div.title = absTitle;
+                        div.onmouseenter = (e) => showTooltip(e, task);
+                        div.onmousemove = moveTooltip;
+                        div.onmouseleave = hideTooltip;
                         
                         if (searchTerm && !task.content.toLowerCase().includes(searchTerm)) div.classList.add('dimmed');
                         else cellHasMatch = true;
 
                         div.onclick = (e) => { 
-                            e.stopPropagation(); 
+                            e.stopPropagation(); hideTooltip();
                             if (canEdit && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
                             else if (canEdit && !isLocked) openModalTask(task); 
                             else openConsultationTask(task); 
                         };
-                        if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
+                        if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { hideTooltip(); draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
                         container.appendChild(div);
                     } else {
                         const div = document.createElement('div');
@@ -949,7 +1042,10 @@ function renderPlanning() {
                         else if (!task.type.includes("Envoi") && task.type !== "Réunion") { div.style.background = task.bg; div.style.color = task.textColor; div.style.borderLeftColor = task.textColor; }
 
                         div.innerHTML = `${noteIndicator}<span class="task-desc">${safeContent}</span>${(task.type === "Réunion" || task.type === "Intervention site") && task.time ? `<span class="task-time-inline">⏰ ${task.time}</span>`:''}${task.location && (task.type === "Intervention site" || task.type === "Réunion") ? `<span class="task-location">📍 ${task.location}</span>`:''}`;
-                        div.title = buildTooltip(task); 
+                        
+                        div.onmouseenter = (e) => showTooltip(e, task);
+                        div.onmousemove = moveTooltip;
+                        div.onmouseleave = hideTooltip;
                         
                         if (searchTerm) {
                             const textString = `${task.content} ${task.location} ${task.type}`.toLowerCase();
@@ -960,12 +1056,12 @@ function renderPlanning() {
                         }
 
                         div.onclick = (e) => { 
-                            e.stopPropagation(); 
+                            e.stopPropagation(); hideTooltip();
                             if(canEdit && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
                             else if(canEdit && !isLocked) openModalTask(task); 
                             else openConsultationTask(task); 
                         };
-                        if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
+                        if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { hideTooltip(); draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
                         container.appendChild(div);
                     }
                 });
@@ -985,7 +1081,8 @@ function pasteTask(date, period, collab) {
   if(!clipboardTask) return; 
   saveHistory();
   state.tasks.push({ ...clipboardTask, id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), date: date, period: period, collab: collab, position: Date.now() }); 
-  sync();
+  syncTasks();
+  logAction("Copie", clipboardTask.content);
   showToast("📋 Collé"); 
 }
 
@@ -1133,7 +1230,9 @@ function saveTask() {
       }
   });
 
-  sync(); closeModal('taskModal');
+  syncTasks(); 
+  logAction(id ? "Modification" : "Création", baseData.content);
+  closeModal('taskModal');
   showToast("💾 Enregistré");
 }
 
@@ -1163,7 +1262,7 @@ function prepareForNewTask() {
 function openFavModal() { const container = document.getElementById('collabFavList'); container.innerHTML = ""; const list = getSortedCollabs(); list.forEach((c, index) => { const isSelectedFav = state.favCollab === c.code; const item = document.createElement('div'); item.className = `collab-list-item ${isSelectedFav ? 'is-fav' : ''}`; item.innerHTML = `<div onclick="setFav('${c.code}')"><b>${c.code} — ${c.name}</b>${isSelectedFav ? '<span class="fav-star">⭐</span>' : ''}</div><div style="display:flex;gap:5px;"><button class="move-btn" onclick="moveCollab(${index},-1,event)">↑</button><button class="move-btn" onclick="moveCollab(${index},1,event)">↓</button></div>`; container.appendChild(item); }); document.getElementById('favModal').classList.add('open'); }
 function setFav(code) { state.favCollab = code; localStorage.setItem('hru_fav', code); openFavModal(); renderPlanning(); }
 function resetFav() { state.favCollab = null; state.customOrder = null; localStorage.removeItem('hru_fav'); localStorage.removeItem('hru_order'); closeModal('favModal'); renderPlanning(); }
-function deleteTask() { saveHistory(); const id = document.getElementById('editTaskId').value; const tIdx = state.tasks.findIndex(t => String(t.id) === String(id)); if (tIdx > -1) { const task = state.tasks[tIdx]; task.deletedAt = Date.now(); state.trash.push(task); state.tasks.splice(tIdx, 1); sync(); closeModal('taskModal'); showToast("🗑️ Supprimé"); } }
+function deleteTask() { saveHistory(); const id = document.getElementById('editTaskId').value; const tIdx = state.tasks.findIndex(t => String(t.id) === String(id)); if (tIdx > -1) { const task = state.tasks[tIdx]; task.deletedAt = Date.now(); state.trash.push(task); state.tasks.splice(tIdx, 1); syncTasks(); syncTrash(); logAction("Suppression", task.content); closeModal('taskModal'); showToast("🗑️ Supprimé"); } }
 
 function openTrashModal() { 
     const list = document.getElementById('trashList'); 
@@ -1183,14 +1282,14 @@ function emptyTrash() {
     if(confirm("Vider définitivement la corbeille ? Action irréversible.")) { 
         saveHistory();
         state.trash = []; 
-        sync(); 
+        syncTrash(); 
         openTrashModal(); 
         showToast("🗑️ Corbeille vidée"); 
     } 
 }
 
-function restoreTask(indexInTrash) { saveHistory(); const task = state.trash.splice(indexInTrash, 1)[0]; delete task.deletedAt; state.tasks.push(task); sync(); openTrashModal(); showToast("✅ Restauré"); }
-function cleanTrash() { const h48 = 48 * 3600 * 1000; const now = Date.now(); state.trash = state.trash.filter(t => (now - t.deletedAt) < h48); sync(); }
+function restoreTask(indexInTrash) { saveHistory(); const task = state.trash.splice(indexInTrash, 1)[0]; delete task.deletedAt; state.tasks.push(task); syncTasks(); syncTrash(); logAction("Restauration", task.content); openTrashModal(); showToast("✅ Restauré"); }
+function cleanTrash() { const h48 = 48 * 3600 * 1000; const now = Date.now(); state.trash = state.trash.filter(t => (now - t.deletedAt) < h48); syncTrash(); }
 
 function openConsultationTask(task) { 
     const container = document.getElementById('viewContentArea'); 
@@ -1247,6 +1346,7 @@ function saveNote() {
         }
     });
 
+    logAction(noteText.trim() === "" ? "Suppression Note" : "Modif. Note", task ? task.content : "");
     showToast(noteText.trim() === "" ? "📝 Note supprimée" : "📝 Note enregistrée");
     closeModal('viewModal');
 }
@@ -1368,7 +1468,7 @@ function toggleType() {
 function moveCollab(index, dir, e) { e.stopPropagation(); let list = getSortedCollabs(); const nIdx = index + dir; if (nIdx >= 0 && nIdx < list.length) { [list[index], list[nIdx]] = [list[nIdx], list[index]]; state.customOrder = list.map(c => c.code); localStorage.setItem('hru_order', JSON.stringify(state.customOrder)); openFavModal(); renderPlanning(); } }
 function addNewYear() { const lastYear = Math.max(...state.years); const nextYear = lastYear + 1; if (confirm(`Ajouter l'année ${nextYear} ?`)) { state.years.push(nextYear); syncAdmin(); } }
 function removeCurrentYear() { if (state.currentYear === 2026) return alert("Interdit."); if (confirm(`Supprimer ${state.currentYear} ?`)) { state.years = state.years.filter(y => y !== state.currentYear); state.currentYear = 2026; syncAdmin(); } }
-function renderYearTabs() { const container = document.getElementById('yearTabs'); container.innerHTML = ""; state.years.sort().forEach(y => { const tab = document.createElement('div'); tab.className = `year-tab ${y === state.currentYear ? 'active' : ''}`; tab.textContent = `ANNEE ${y}`; tab.onclick = () => { state.currentYear = y; renderPlanning(); renderYearTabs(); }; container.appendChild(tab); }); }
+function renderYearTabs() { const container = document.getElementById('yearTabs'); container.innerHTML = ""; state.years.sort().forEach(y => { const tab = document.createElement('div'); tab.className = `year-tab ${y === state.currentYear ? 'active' : ''}`; tab.textContent = `ANNEE ${y}`; tab.onclick = () => { state.currentYear = y; loadTasksForYear(y); renderYearTabs(); }; container.appendChild(tab); }); }
 function exportData() { const blob = new Blob([JSON.stringify({ tasks: state.tasks, collabs: state.collabs, years: state.years, trash: state.trash }, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `planning_global.json`; link.click(); }
 function openCollabModal() { document.getElementById('collabModal').classList.add('open'); }
 function saveCollab() { const pre = document.getElementById('newPre').value.trim(); const nom = document.getElementById('newNom').value.trim(); const tri = document.getElementById('newTri').value.trim().toUpperCase(); if(!pre || !tri) return alert("Données manquantes"); state.collabs.push({ code: tri, name: pre + " " + nom }); syncAdmin(); closeModal('collabModal'); }
@@ -1384,7 +1484,8 @@ function handleInvert(targetId) {
     const tmp = { date: t.date, period: t.period, collab: t.collab, pos: t.position }; 
     t.date = s.date; t.period = s.period; t.collab = s.collab; t.position = s.position; 
     s.date = tmp.date; s.period = tmp.period; s.collab = tmp.collab; s.position = tmp.pos; 
-    sync(); draggedTaskId = null; 
+    syncTasks(); draggedTaskId = null; 
+    logAction("Inversion de tâches", `${s.content} avec ${t.content}`);
 }
 
 function getLocalDateString(date) { let d = new Date(date); let m = '' + (d.getMonth() + 1); let dy = '' + d.getDate(); if (m.length < 2) m = '0' + m; if (dy.length < 2) dy = '0' + dy; return [d.getFullYear(), m, dy].join('-'); }
