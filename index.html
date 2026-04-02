@@ -55,7 +55,6 @@
   body.zoom-out .th-tri { font-size: 11px; margin-bottom: 0; }
   body.zoom-out .week-row-head { height: 22px !important; font-size: 9px; line-height: 22px; }
 
-  /* Passage de display: none à display: flex par défaut pour que tout le monde le voie quand l'app s'affiche */
   .zoom-container { display: flex; align-items: center; gap: 10px; background: var(--surface2); padding: 5px 15px; border-radius: 20px; border: 1px solid var(--border); margin-left: 10px; }
   .zoom-slider { cursor: pointer; width: 80px; accent-color: var(--accent); }
   .zoom-label { font-size: 10px; font-weight: 800; color: var(--accent); font-family: 'Space Mono'; }
@@ -76,6 +75,10 @@
   .admin-toggle { display: flex; align-items: center; gap: 10px; padding: 15px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; margin-bottom: 20px; color: #1a1a18; }
   .admin-toggle.selected { border-color: var(--orange); background: var(--orange-light); }
   .login-btn { width: 100%; padding: 15px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+
+  /* Bloc mot de passe dynamique */
+  .pwd-prompt { display: none; width: 100%; margin-top: 8px; }
+  .profile-btn.selected .pwd-prompt { display: flex; flex-direction: column; gap: 5px; }
 
   #app { display: none; flex-direction: column; height: 100vh; }
   #app.visible { display: flex; }
@@ -205,11 +208,13 @@
 <div id="loginScreen">
   <div class="login-box">
     <h2 class="login-logo" style="color: var(--text)">⬡ PLANNING PRODUCTION HRU</h2>
+    
     <div class="login-grid" id="profileGrid"></div>
+    <div id="collabAuthError" style="color: var(--red); font-size: 11px; margin-top: 8px; text-align:center; display: none; font-weight:bold;">Identifiants incorrects</div>
     
     <div class="admin-toggle" id="adminToggle" onclick="handleAdminToggle()">
       <span>🔧</span>
-      <div><div style="font-weight:600">Mode Administration</div><div style="font-size:10px; color:gray">Sécurisé par Firebase Auth</div></div>
+      <div><div style="font-weight:600">Administration</div><div style="font-size:10px; color:gray">Gestion de la structure</div></div>
     </div>
 
     <div id="adminAuthBlock" style="display:none; margin-bottom: 20px; padding: 15px; background: var(--surface2); border-radius: 8px; border: 1px solid var(--border);">
@@ -238,15 +243,13 @@
         <div id="userInfo" style="font-size:11px; opacity:0.8;"></div>
         <button onclick="window.print()" style="padding:6px 12px; cursor:pointer; background:#ffffff; border:none; border-radius:4px; font-size:10px; font-weight:bold; color:#1a1a18;">🖨️ PDF</button>
         <button id="exportBtn" onclick="exportData()" style="padding:6px 12px; cursor:pointer; background:rgba(255,255,255,0.2); border:1px solid white; border-radius:4px; font-size:10px; font-weight:bold; color:white; display:none;">💾 EXPORTER</button>
-        <button id="importBtn" onclick="triggerImport()" style="padding:6px 12px; cursor:pointer; background:rgba(255,255,255,0.2); border:1px solid white; border-radius:4px; font-size:10px; font-weight:bold; color:white; display:none;">📂 IMPORTER</button>
-        <input type="file" id="importInput" style="display:none" onchange="importData(event)" accept=".json">
         <button onclick="location.reload()" style="padding:4px 10px; cursor:pointer; background:rgba(255,255,255,0.2); border:none; color:white; border-radius:4px;">✖</button>
     </div>
   </div>
 
   <div class="planning-toolbar">
     <div id="clipboardBar" style="display:none; position:absolute; inset:0; background:var(--accent); color:white; align-items:center; justify-content:center; gap:15px; z-index:1000;">
-        <span>📋 Tâche copiée ! Cliquez sur une case (Admin) pour coller.</span>
+        <span>📋 Tâche copiée ! Cliquez sur une case pour coller.</span>
         <button onclick="cancelPasteMode()" style="background:rgba(255,255,255,0.2); border:1px solid white; color:white; padding:4px 10px; border-radius:4px; cursor:pointer;">Annuler</button>
     </div>
     <button class="today-btn" onclick="scrollToToday()">🎯 AUJOURD'HUI</button>
@@ -418,33 +421,46 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// ECOUTEUR DE SESSION FIREBASE AUTH
-firebase.auth().onAuthStateChanged((user) => {
-    if (user) {
-        state.isAdmin = true;
-        const toggle = document.getElementById('adminToggle');
-        if(toggle) toggle.classList.add('selected');
-    }
-});
-
-const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
 let selectedBg = "#E8EEF5", selectedTextColor = "#1A4373", draggedTaskId = null, clipboardTask = null;
 let taskHistory = []; 
 let redoHistory = []; 
-let state = { user: null, isAdmin: false, collabs: DEFAULT_COLLABS, tasks: [], trash: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
+let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
+
+// ECOUTEUR DE SESSION FIREBASE AUTH
+firebase.auth().onAuthStateChanged((user) => {
+    if (user) {
+        // Détecter si on est sur le compte "admin@..." ou un collab
+        if (user.email && user.email.startsWith('admin@')) {
+            state.isAdmin = true;
+            const toggle = document.getElementById('adminToggle');
+            if(toggle) toggle.classList.add('selected');
+        }
+        // Si l'utilisateur est déjà dans l'app, on actualise
+        if (document.getElementById('app').classList.contains('visible')) {
+            doLogin();
+        }
+    } else {
+        state.isAdmin = false;
+        const toggle = document.getElementById('adminToggle');
+        if(toggle) toggle.classList.remove('selected');
+    }
+});
 
 db.ref('planning').on('value', (snapshot) => {
     const data = snapshot.val();
     if (data) {
         state.tasks = data.tasks ? (Array.isArray(data.tasks) ? data.tasks : Object.values(data.tasks)) : [];
-        state.collabs = data.collabs ? (Array.isArray(data.collabs) ? data.collabs : Object.values(data.collabs)) : DEFAULT_COLLABS;
+        state.collabs = data.collabs ? (Array.isArray(data.collabs) ? data.collabs : Object.values(data.collabs)) : [];
         state.years = data.years ? (Array.isArray(data.years) ? data.years : Object.values(data.years)) : [2026, 2027];
         state.trash = data.trash ? (Array.isArray(data.trash) ? data.trash : Object.values(data.trash)) : [];
         state.config = data.config || { lockPast: false };
         state.notes = data.notes || {};
         updateLockBtnUI();
-        renderPlanning();
-        renderYearTabs();
+        init(); // Maj de la grille
+        if (document.getElementById('app').classList.contains('visible')) {
+            renderPlanning();
+            renderYearTabs();
+        }
     }
 });
 
@@ -452,18 +468,19 @@ function sync() {
     const cleanTasks = JSON.parse(JSON.stringify(state.tasks));
     const cleanTrash = JSON.parse(JSON.stringify(state.trash));
 
-    let payload = { tasks: cleanTasks, trash: cleanTrash };
-
-    // Sécurité: L'Éditeur ne peut pas modifier la configuration
-    if (state.isAdmin) {
-        payload.collabs = state.collabs;
-        payload.years = state.years;
-        payload.config = state.config;
-    }
-
-    db.ref('planning').update(payload).catch(err => {
+    db.ref('planning').update({ 
+        tasks: cleanTasks, trash: cleanTrash
+    }).catch(err => {
         alert("Erreur de synchronisation Firebase. Avez-vous mis à jour les règles ?");
         console.error(err);
+    });
+}
+
+function syncAdmin() {
+    db.ref('planning').update({ 
+        collabs: state.collabs, years: state.years, config: state.config 
+    }).catch(err => {
+        alert("Seul l'Administrateur peut modifier la configuration !");
     });
 }
 
@@ -533,20 +550,32 @@ window.addEventListener('keydown', (e) => {
 });
 
 function init() { 
-    const grid = document.getElementById('profileGrid'); grid.innerHTML = ""; 
-    state.collabs.forEach(c => { 
+    const grid = document.getElementById('profileGrid'); 
+    if(!grid) return;
+    grid.innerHTML = ""; 
+    state.collabs.forEach((c, index) => { 
         const btn = document.createElement('div'); btn.className = 'profile-btn'; 
-        btn.innerHTML = `<div class="profile-avatar">${c.code}</div><div style="font-size:11px; font-weight:600">${c.name}</div>`; 
-        btn.onclick = () => handleProfileSelect(btn, c); grid.appendChild(btn); 
+        btn.id = `collab-btn-${index}`;
+        btn.innerHTML = `
+            <div class="profile-avatar">${c.code}</div>
+            <div style="font-size:11px; font-weight:600">${c.name}</div>
+            <div class="pwd-prompt" id="pwd-prompt-${index}">
+                <input type="password" id="pwd-input-${index}" class="form-input" placeholder="Mot de passe" onclick="event.stopPropagation()" onkeyup="if(event.key==='Enter') loginCollab(${index})">
+                <button onclick="event.stopPropagation(); loginCollab(${index})" style="width:100%; padding:6px; font-size:10px; background:var(--accent); color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Valider</button>
+            </div>
+        `; 
+        btn.onclick = () => handleProfileSelect(btn, c, index); 
+        grid.appendChild(btn); 
     }); 
-    renderYearTabs(); 
 }
 
-function handleProfileSelect(btn, collab) { 
-    state.user = collab;
+function handleProfileSelect(btn, collab, index) { 
     document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('selected')); 
     btn.classList.add('selected'); 
     document.getElementById('adminAuthBlock').style.display = 'none';
+    const errDiv = document.getElementById('collabAuthError');
+    if(errDiv) errDiv.style.display = 'none';
+    setTimeout(() => { document.getElementById(`pwd-input-${index}`).focus(); }, 100);
 }
 
 function handleAdminToggle() { 
@@ -555,16 +584,36 @@ function handleAdminToggle() {
     if (state.isAdmin) {
         if(confirm("Se déconnecter du mode Administrateur ?")) {
             firebase.auth().signOut().then(() => {
-                state.isAdmin = false;
-                document.getElementById('adminToggle').classList.remove('selected');
                 showToast("Déconnecté du mode Admin");
             });
         }
     } else {
         authBlock.style.display = authBlock.style.display === 'none' ? 'block' : 'none';
-        state.user = null;
         document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('selected'));
+        const errDiv = document.getElementById('collabAuthError');
+        if(errDiv) errDiv.style.display = 'none';
     }
+}
+
+// ---> C'EST ICI QUE LE MOT DE PASSE DU COLLAB EST VÉRIFIÉ <---
+function loginCollab(index) {
+    const collab = state.collabs[index];
+    const pwd = document.getElementById(`pwd-input-${index}`).value;
+    const email = `${collab.code.toLowerCase()}@hru.fr`; // Fabrication de l'email
+    const errDiv = document.getElementById('collabAuthError');
+
+    if(!pwd) return;
+
+    firebase.auth().signInWithEmailAndPassword(email, pwd)
+    .then((userCredential) => {
+        state.user = collab;
+        errDiv.style.display = 'none';
+        doLogin();
+    })
+    .catch((error) => {
+        errDiv.textContent = "Mot de passe incorrect pour " + collab.name;
+        errDiv.style.display = 'block';
+    });
 }
 
 function loginFirebaseAdmin() {
@@ -576,13 +625,12 @@ function loginFirebaseAdmin() {
 
     firebase.auth().signInWithEmailAndPassword(email, pwd)
     .then((userCredential) => {
-        state.isAdmin = true;
-        document.getElementById('adminToggle').classList.add('selected');
-        document.getElementById('adminAuthBlock').style.display = 'none';
+        state.user = { name: "Administrateur", code: "Admin" };
         errDiv.style.display = 'none';
         showToast("Accès Admin accordé");
         document.getElementById('adminEmail').value = '';
         document.getElementById('adminPwd').value = '';
+        doLogin();
     })
     .catch((error) => {
         errDiv.textContent = "Email ou mot de passe incorrect.";
@@ -591,7 +639,6 @@ function loginFirebaseAdmin() {
 }
 
 function doLogin() { 
-    if (!state.user && !state.isAdmin) return alert("Sélectionnez un profil ou connectez-vous en Admin"); 
     document.getElementById('loginScreen').style.display = 'none'; 
     document.getElementById('app').classList.add('visible'); 
     
@@ -626,12 +673,16 @@ function doLogin() {
     } else {
         document.getElementById('userInfo').textContent = `👤 Mode Lecture (${state.user.name})`; 
         document.getElementById('accessBtn').style.display = 'none';
+        document.getElementById('newCollabBtn').style.display = 'none'; 
+        document.getElementById('delCollabBtn').style.display = 'none'; 
         document.getElementById('exportBtn').style.display = 'none';
         document.getElementById('statsBtn').style.display = 'none';
         document.getElementById('viewFilter').style.display = 'none';
         document.getElementById('viewFilter').value = 'all'; 
         document.getElementById('lockBtn').style.display = 'none';
         document.getElementById('trashBtn').style.display = 'none'; 
+        document.getElementById('addYearBtn').style.display = 'none'; 
+        document.getElementById('removeYearBtn').style.display = 'none'; 
     }
     
     const realCurrentYear = new Date().getFullYear();
@@ -644,7 +695,6 @@ function doLogin() {
     setTimeout(scrollToToday, 600); 
 }
 
-// GESTION DES ACCÈS
 function openAccessModal() {
     const container = document.getElementById('accessList');
     container.innerHTML = state.collabs.map((c, i) => `
@@ -661,7 +711,7 @@ function saveAccess() {
         const chk = document.getElementById(`access_chk_${i}`);
         c.isEditor = chk.checked;
     });
-    sync();
+    syncAdmin();
     closeModal('accessModal');
     showToast("🔐 Droits mis à jour");
 }
@@ -669,7 +719,7 @@ function saveAccess() {
 function toggleLockPast() {
     if(!state.config) state.config = {};
     state.config.lockPast = !state.config.lockPast;
-    sync();
+    syncAdmin();
     showToast(state.config.lockPast ? "🔒 Passé verrouillé" : "🔓 Passé déverrouillé");
 }
 
@@ -1282,14 +1332,14 @@ function toggleType() {
 }
 
 function moveCollab(index, dir, e) { e.stopPropagation(); let list = getSortedCollabs(); const nIdx = index + dir; if (nIdx >= 0 && nIdx < list.length) { [list[index], list[nIdx]] = [list[nIdx], list[index]]; state.customOrder = list.map(c => c.code); localStorage.setItem('hru_order', JSON.stringify(state.customOrder)); openFavModal(); renderPlanning(); } }
-function addNewYear() { const lastYear = Math.max(...state.years); const nextYear = lastYear + 1; if (confirm(`Ajouter l'année ${nextYear} ?`)) { state.years.push(nextYear); sync(); } }
-function removeCurrentYear() { if (state.currentYear === 2026) return alert("Interdit."); if (confirm(`Supprimer ${state.currentYear} ?`)) { state.years = state.years.filter(y => y !== state.currentYear); state.currentYear = 2026; sync(); } }
+function addNewYear() { const lastYear = Math.max(...state.years); const nextYear = lastYear + 1; if (confirm(`Ajouter l'année ${nextYear} ?`)) { state.years.push(nextYear); syncAdmin(); } }
+function removeCurrentYear() { if (state.currentYear === 2026) return alert("Interdit."); if (confirm(`Supprimer ${state.currentYear} ?`)) { state.years = state.years.filter(y => y !== state.currentYear); state.currentYear = 2026; syncAdmin(); } }
 function renderYearTabs() { const container = document.getElementById('yearTabs'); container.innerHTML = ""; state.years.sort().forEach(y => { const tab = document.createElement('div'); tab.className = `year-tab ${y === state.currentYear ? 'active' : ''}`; tab.textContent = `ANNEE ${y}`; tab.onclick = () => { state.currentYear = y; renderPlanning(); renderYearTabs(); }; container.appendChild(tab); }); }
 function exportData() { const blob = new Blob([JSON.stringify({ tasks: state.tasks, collabs: state.collabs, years: state.years, trash: state.trash }, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `planning_global.json`; link.click(); }
 function openCollabModal() { document.getElementById('collabModal').classList.add('open'); }
-function saveCollab() { const pre = document.getElementById('newPre').value.trim(); const nom = document.getElementById('newNom').value.trim(); const tri = document.getElementById('newTri').value.trim().toUpperCase(); if(!pre || !tri) return alert("Données manquantes"); state.collabs.push({ code: tri, name: pre + " " + nom }); sync(); closeModal('collabModal'); }
+function saveCollab() { const pre = document.getElementById('newPre').value.trim(); const nom = document.getElementById('newNom').value.trim(); const tri = document.getElementById('newTri').value.trim().toUpperCase(); if(!pre || !tri) return alert("Données manquantes"); state.collabs.push({ code: tri, name: pre + " " + nom }); syncAdmin(); closeModal('collabModal'); }
 function openDeleteCollabModal() { const container = document.getElementById('collabDeleteList'); container.innerHTML = state.collabs.map(c => `<div class="collab-list-item"><span><b>${c.code}</b> — ${c.name}</span><button style="background:var(--red-light); color:var(--red); border:none; padding:5px; border-radius:4px; cursor:pointer;" onclick="deleteCollab('${c.code}')">✕</button></div>`).join(''); document.getElementById('deleteCollabModal').classList.add('open'); }
-function deleteCollab(code) { if (confirm(`Supprimer ${code} ?`)) { state.collabs = state.collabs.filter(c => c.code !== code); sync(); openDeleteCollabModal(); } }
+function deleteCollab(code) { if (confirm(`Supprimer ${code} ?`)) { state.collabs = state.collabs.filter(c => c.code !== code); syncAdmin(); openDeleteCollabModal(); } }
 
 function handleInvert(targetId) { 
     if (!draggedTaskId || String(draggedTaskId) === String(targetId)) return; 
