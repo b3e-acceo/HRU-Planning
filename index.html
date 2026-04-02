@@ -426,9 +426,9 @@ let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], con
 // GESTION DE LA CONNEXION (Sécurisée)
 firebase.auth().onAuthStateChanged((user) => {
     if (user) {
-        if (user.email && user.email.startsWith('admin@')) {
+        if (user.email && (user.email.toLowerCase() === 'nicolas.renault@acceo.eu' || user.email.startsWith('admin@'))) {
             state.isAdmin = true;
-            state.user = { name: "Administrateur", code: "Admin" };
+            state.user = { name: "Nicolas R.", code: "Admin" };
             const toggle = document.getElementById('adminToggle');
             if(toggle) toggle.classList.add('selected');
             doLogin();
@@ -612,7 +612,7 @@ function loginCollab(index) {
     const collabsToUse = state.collabs.length > 0 ? state.collabs : DEFAULT_COLLABS;
     const collab = collabsToUse[index];
     const pwd = document.getElementById(`pwd-input-${index}`).value;
-    const email = `${collab.code.toLowerCase().trim()}@b3e.fr`;
+    const email = `${collab.code.toLowerCase().trim()}@hru.fr`;
     const errDiv = document.getElementById('collabAuthError');
 
     if(!pwd) return;
@@ -657,7 +657,7 @@ function doLogin() {
     const isEditor = state.user && state.user.isEditor;
 
     if(state.isAdmin) { 
-        document.getElementById('userInfo').textContent = "🔧 Mode Admin"; 
+        document.getElementById('userInfo').textContent = `🔧 Mode Admin (${state.user.name})`; 
         document.getElementById('accessBtn').style.display = 'block';
         document.getElementById('newCollabBtn').style.display = 'block'; 
         document.getElementById('delCollabBtn').style.display = 'block'; 
@@ -898,10 +898,13 @@ function renderPlanning() {
                     const noteData = state.notes && state.notes[task.id];
                     const noteAuthor = noteData ? (typeof noteData === 'string' ? 'Inconnu' : noteData.author) : '';
                     const noteIndicator = noteData ? `<div class="task-note-icon" title="Note par ${noteAuthor}">📝</div>` : '';
+                    
+                    // APPLICATION DU CORRECTION DE SAUT DE LIGNE
+                    const safeContent = (task.content || '').replace(/\n/g, '<br>');
 
                     if (task.type === "Absence") {
                         const div = document.createElement('div'); div.className = "cell-absence"; 
-                        div.innerHTML = `<span>${task.content}</span>${noteIndicator}`;
+                        div.innerHTML = `<span>${safeContent}</span>${noteIndicator}`;
                         
                         let absTitle = "Absence : " + task.content;
                         if (noteData) {
@@ -927,7 +930,7 @@ function renderPlanning() {
                         if(task.type === "Réalisation bureau") div.style.borderColor = task.textColor;
                         else if (!task.type.includes("Envoi") && task.type !== "Réunion") { div.style.background = task.bg; div.style.color = task.textColor; div.style.borderLeftColor = task.textColor; }
 
-                        div.innerHTML = `${noteIndicator}<span class="task-desc">${task.content}</span>${(task.type === "Réunion" || task.type === "Intervention site") && task.time ? `<span class="task-time-inline">⏰ ${task.time}</span>`:''}${task.location && (task.type === "Intervention site" || task.type === "Réunion") ? `<span class="task-location">📍 ${task.location}</span>`:''}`;
+                        div.innerHTML = `${noteIndicator}<span class="task-desc">${safeContent}</span>${(task.type === "Réunion" || task.type === "Intervention site") && task.time ? `<span class="task-time-inline">⏰ ${task.time}</span>`:''}${task.location && (task.type === "Intervention site" || task.type === "Réunion") ? `<span class="task-location">📍 ${task.location}</span>`:''}`;
                         div.title = buildTooltip(task); 
                         
                         if (searchTerm) {
