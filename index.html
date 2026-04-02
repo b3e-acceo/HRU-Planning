@@ -76,6 +76,7 @@
   .admin-toggle.selected { border-color: var(--orange); background: var(--orange-light); }
   .login-btn { width: 100%; padding: 15px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
 
+  /* Bloc mot de passe dynamique */
   .pwd-prompt { display: none; width: 100%; margin-top: 8px; }
   .profile-btn.selected .pwd-prompt { display: flex; flex-direction: column; gap: 5px; }
 
@@ -446,17 +447,17 @@ function initApp() {
     db.ref('planning').once('value', (snap) => {
         const data = snap.val() || {};
         
-        // MIGRATION AUTOMATIQUE DES ANCIENNES TACHES VERS LE SYSTEME PAR ANNEE
-        if (data.tasks && Array.isArray(data.tasks)) {
+        // MIGRATION AUTOMATIQUE (si les tâches ne sont pas encore classées par année)
+        if (data.tasks && !data.tasks['2026'] && !data.tasks['2027']) {
+            let oldTasks = Array.isArray(data.tasks) ? data.tasks : Object.values(data.tasks);
             let newTasksFormat = {};
-            data.tasks.forEach(t => {
+            oldTasks.forEach(t => {
                 if(!t) return;
                 let y = t.date ? t.date.split('-')[0] : '2026';
                 if(!newTasksFormat[y]) newTasksFormat[y] = [];
                 newTasksFormat[y].push(t);
             });
-            let updates = { 'planning/tasks': null }; // supprime l'ancien gros bloc
-            for(let y in newTasksFormat) { updates['planning/tasks/' + y] = newTasksFormat[y]; }
+            let updates = { 'planning/tasks': newTasksFormat };
             db.ref().update(updates).then(startListeners);
         } else {
             startListeners();
@@ -533,9 +534,7 @@ function checkAutoLogin() {
     }
 }
 
-// FONCTIONS DE SAUVEGARDE MODULAIRES
 function syncTasks() { 
-    // Gère le cas où une tâche récurrente déborderait sur l'année suivante
     let tasksByYear = {};
     state.tasks.forEach(t => {
         if(!t || !t.date) return;
@@ -560,7 +559,6 @@ function syncAdmin() {
     }).catch(err => { alert("Seul l'Administrateur peut modifier la configuration !"); });
 }
 
-// SYSTEME DE TRACABILITE
 function logAction(actionStr, details) {
     if(!state.isAdmin && (!state.user || !state.user.isEditor)) return;
     const author = state.user ? state.user.code : 'Admin';
@@ -1300,11 +1298,15 @@ function openConsultationTask(task) {
         wrap.innerHTML = `<div class="view-label">${label}</div><div class="view-value">${value}</div>`; 
         container.appendChild(wrap); 
     }; 
+    
+    const safeContent = (task.content || '').replace(/\n/g, '<br>');
+    const safePrestations = (task.prestations || '').replace(/\n/g, '<br>');
+
     addField("Type", task.type); 
-    addField("Description", task.content); 
+    addField("Description", safeContent); 
     addField("Horaire", task.time); 
     addField("Lieu", task.location); 
-    addField("Détail prestations", task.prestations); 
+    addField("Détail prestations", safePrestations); 
     
     if(task.url) {
         addField("Dossier Serveur", `<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
