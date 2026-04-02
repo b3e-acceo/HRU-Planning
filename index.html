@@ -432,6 +432,7 @@ firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
 let selectedBg = "#E8EEF5", selectedTextColor = "#1A4373", draggedTaskId = null, clipboardTask = null;
 let taskHistory = []; 
 let redoHistory = []; 
+let tooltipTimeout = null, lastMouseE = null;
 let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
 let dataLoaded = false;
 let isInitialized = false;
@@ -439,7 +440,6 @@ let currentYearListener = null;
 
 const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
 
-// INITIALISATION ET MIGRATION AUTO DES DONNEES
 function initApp() {
     if(isInitialized) return;
     isInitialized = true;
@@ -447,7 +447,6 @@ function initApp() {
     db.ref('planning').once('value', (snap) => {
         const data = snap.val() || {};
         
-        // MIGRATION AUTOMATIQUE (si les tâches ne sont pas encore classées par année)
         if (data.tasks && !data.tasks['2026'] && !data.tasks['2027']) {
             let oldTasks = Array.isArray(data.tasks) ? data.tasks : Object.values(data.tasks);
             let newTasksFormat = {};
@@ -836,7 +835,7 @@ function updateLockBtnUI() {
 
 function getSortedCollabs() { let list = [...state.collabs]; if (state.customOrder) { list.sort((a, b) => state.customOrder.indexOf(a.code) - state.customOrder.indexOf(b.code)); } if (state.favCollab) { const fav = list.find(c => c.code === state.favCollab); if (fav) list = [fav, ...list.filter(c => c.code !== state.favCollab)]; } return list; }
 
-// --- INFO BULLE SUR MESURE ---
+// --- INFO BULLE SUR MESURE (AVEC DELAI) ---
 function showTooltip(e, task) {
     const tt = document.getElementById('customTooltip');
     const noteData = state.notes && state.notes[task.id];
@@ -863,6 +862,7 @@ function showTooltip(e, task) {
     tt.style.display = 'block';
     moveTooltip(e);
 }
+
 function moveTooltip(e) {
     const tt = document.getElementById('customTooltip');
     if(tt.style.display === 'none') return;
@@ -873,6 +873,7 @@ function moveTooltip(e) {
     tt.style.left = x + 'px';
     tt.style.top = y + 'px';
 }
+
 function hideTooltip() {
     document.getElementById('customTooltip').style.display = 'none';
 }
@@ -1018,20 +1019,30 @@ function renderPlanning() {
                         const div = document.createElement('div'); div.className = "cell-absence"; 
                         div.innerHTML = `<span>${safeContent}</span>${noteIndicator}`;
                         
-                        div.onmouseenter = (e) => showTooltip(e, task);
-                        div.onmousemove = moveTooltip;
-                        div.onmouseleave = hideTooltip;
+                        div.onmouseenter = (e) => { 
+                            lastMouseE = e;
+                            clearTimeout(tooltipTimeout);
+                            tooltipTimeout = setTimeout(() => showTooltip(lastMouseE, task), 500); 
+                        };
+                        div.onmousemove = (e) => {
+                            lastMouseE = e;
+                            moveTooltip(e);
+                        };
+                        div.onmouseleave = () => { 
+                            clearTimeout(tooltipTimeout);
+                            hideTooltip(); 
+                        };
                         
                         if (searchTerm && !task.content.toLowerCase().includes(searchTerm)) div.classList.add('dimmed');
                         else cellHasMatch = true;
 
                         div.onclick = (e) => { 
-                            e.stopPropagation(); hideTooltip();
+                            e.stopPropagation(); clearTimeout(tooltipTimeout); hideTooltip();
                             if (canEdit && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
                             else if (canEdit && !isLocked) openModalTask(task); 
                             else openConsultationTask(task); 
                         };
-                        if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { hideTooltip(); draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
+                        if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { clearTimeout(tooltipTimeout); hideTooltip(); draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
                         container.appendChild(div);
                     } else {
                         const div = document.createElement('div');
@@ -1041,9 +1052,19 @@ function renderPlanning() {
 
                         div.innerHTML = `${noteIndicator}<span class="task-desc">${safeContent}</span>${(task.type === "Réunion" || task.type === "Intervention site") && task.time ? `<span class="task-time-inline">⏰ ${task.time}</span>`:''}${task.location && (task.type === "Intervention site" || task.type === "Réunion") ? `<span class="task-location">📍 ${task.location}</span>`:''}`;
                         
-                        div.onmouseenter = (e) => showTooltip(e, task);
-                        div.onmousemove = moveTooltip;
-                        div.onmouseleave = hideTooltip;
+                        div.onmouseenter = (e) => { 
+                            lastMouseE = e;
+                            clearTimeout(tooltipTimeout);
+                            tooltipTimeout = setTimeout(() => showTooltip(lastMouseE, task), 500); 
+                        };
+                        div.onmousemove = (e) => {
+                            lastMouseE = e;
+                            moveTooltip(e);
+                        };
+                        div.onmouseleave = () => { 
+                            clearTimeout(tooltipTimeout);
+                            hideTooltip(); 
+                        };
                         
                         if (searchTerm) {
                             const textString = `${task.content} ${task.location} ${task.type}`.toLowerCase();
@@ -1054,12 +1075,12 @@ function renderPlanning() {
                         }
 
                         div.onclick = (e) => { 
-                            e.stopPropagation(); hideTooltip();
+                            e.stopPropagation(); clearTimeout(tooltipTimeout); hideTooltip();
                             if(canEdit && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
                             else if(canEdit && !isLocked) openModalTask(task); 
                             else openConsultationTask(task); 
                         };
-                        if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { hideTooltip(); draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
+                        if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { clearTimeout(tooltipTimeout); hideTooltip(); draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
                         container.appendChild(div);
                     }
                 });
