@@ -418,12 +418,15 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
+// FORCER LA SESSION À EXPIRER À LA FERMETURE DU NAVIGATEUR
+firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
+
 let selectedBg = "#E8EEF5", selectedTextColor = "#1A4373", draggedTaskId = null, clipboardTask = null;
 let taskHistory = []; 
 let redoHistory = []; 
 let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
 
-// GESTION DE LA CONNEXION (Sécurisée)
+// ECOUTEUR DE SESSION FIREBASE AUTH
 firebase.auth().onAuthStateChanged((user) => {
     if (user) {
         if (user.email && (user.email.toLowerCase() === 'nicolas.renault@acceo.eu' || user.email.startsWith('admin@'))) {
@@ -431,10 +434,9 @@ firebase.auth().onAuthStateChanged((user) => {
             state.user = { name: "Nicolas R.", code: "Admin" };
             const toggle = document.getElementById('adminToggle');
             if(toggle) toggle.classList.add('selected');
-            doLogin();
+            checkAutoLogin();
         } else {
             state.isAdmin = false;
-            // On retrouve le collaborateur correspondant à l'e-mail
             const code = user.email.split('@')[0].toUpperCase();
             
             const tryLogin = setInterval(() => {
@@ -442,12 +444,11 @@ firebase.auth().onAuthStateChanged((user) => {
                 const found = collabsList.find(c => c.code === code);
                 if (found) {
                     state.user = found;
-                    doLogin();
+                    checkAutoLogin();
                     clearInterval(tryLogin);
                 } else if (state.collabs.length > 0) {
-                    // Sécurité au cas où un profil a été supprimé entre temps
                     state.user = { name: "Compte inconnu", code: code, isEditor: false };
-                    doLogin();
+                    checkAutoLogin();
                     clearInterval(tryLogin);
                 }
             }, 50);
@@ -464,6 +465,7 @@ firebase.auth().onAuthStateChanged((user) => {
 });
 
 const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
+let dataLoaded = false;
 
 db.ref('planning').on('value', (snapshot) => {
     const data = snapshot.val();
@@ -474,16 +476,26 @@ db.ref('planning').on('value', (snapshot) => {
         state.trash = data.trash ? (Array.isArray(data.trash) ? data.trash : Object.values(data.trash)) : [];
         state.config = data.config || { lockPast: false };
         state.notes = data.notes || {};
+        dataLoaded = true;
         updateLockBtnUI();
-        if(!state.user && !state.isAdmin) init(); // Maj grille de connexion
+        init(); 
         if (document.getElementById('app').classList.contains('visible')) {
             renderPlanning();
             renderYearTabs();
+        } else {
+            checkAutoLogin();
         }
     } else {
+        dataLoaded = true;
         init();
     }
 });
+
+function checkAutoLogin() {
+    if(dataLoaded && (state.isAdmin || state.user) && !document.getElementById('app').classList.contains('visible')) {
+        doLogin();
+    }
+}
 
 function sync() { 
     const cleanTasks = JSON.parse(JSON.stringify(state.tasks));
@@ -611,13 +623,18 @@ function handleAdminToggle() {
 function loginCollab(index) {
     const collabsToUse = state.collabs.length > 0 ? state.collabs : DEFAULT_COLLABS;
     const collab = collabsToUse[index];
-    const pwd = document.getElementById(`pwd-input-${index}`).value;
+    const pwdInput = document.getElementById(`pwd-input-${index}`);
+    const pwd = pwdInput.value;
     const email = `${collab.code.toLowerCase().trim()}@hru.fr`;
     const errDiv = document.getElementById('collabAuthError');
 
     if(!pwd) return;
 
-    firebase.auth().signInWithEmailAndPassword(email, pwd)
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+    .then(() => firebase.auth().signInWithEmailAndPassword(email, pwd))
+    .then(() => {
+        pwdInput.value = '';
+    })
     .catch((error) => {
         errDiv.textContent = "Mot de passe incorrect pour " + collab.name;
         errDiv.style.display = 'block';
@@ -626,16 +643,18 @@ function loginCollab(index) {
 
 function loginFirebaseAdmin() {
     const email = document.getElementById('adminEmail').value.trim();
-    const pwd = document.getElementById('adminPwd').value;
+    const pwdInput = document.getElementById('adminPwd');
+    const pwd = pwdInput.value;
     const errDiv = document.getElementById('adminAuthError');
 
     if(!email || !pwd) { errDiv.textContent = "Veuillez remplir les deux champs."; errDiv.style.display = 'block'; return; }
 
-    firebase.auth().signInWithEmailAndPassword(email, pwd)
+    firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION)
+    .then(() => firebase.auth().signInWithEmailAndPassword(email, pwd))
     .then(() => {
         errDiv.style.display = 'none';
         document.getElementById('adminEmail').value = '';
-        document.getElementById('adminPwd').value = '';
+        pwdInput.value = '';
     })
     .catch((error) => {
         errDiv.textContent = "Email ou mot de passe incorrect.";
@@ -899,7 +918,6 @@ function renderPlanning() {
                     const noteAuthor = noteData ? (typeof noteData === 'string' ? 'Inconnu' : noteData.author) : '';
                     const noteIndicator = noteData ? `<div class="task-note-icon" title="Note par ${noteAuthor}">📝</div>` : '';
                     
-                    // APPLICATION DU CORRECTION DE SAUT DE LIGNE
                     const safeContent = (task.content || '').replace(/\n/g, '<br>');
 
                     if (task.type === "Absence") {
