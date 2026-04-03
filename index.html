@@ -91,7 +91,11 @@
   .add-year-btn { background: rgba(255,255,255,0.2); }
   .remove-year-btn { background: rgba(255,255,255,0.2); }
 
-  .planning-toolbar { background: var(--surface); padding: 10px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; flex-shrink: 0; position: relative; }
+  /* --- NOUVELLE STRUCTURE TOOLBAR --- */
+  .planning-toolbar { background: var(--surface); padding: 10px 20px; border-bottom: 1px solid var(--border); display: block; flex-shrink: 0; position: relative; }
+  .toolbar-items { display: flex; align-items: center; gap: 10px; width: 100%; }
+  .mobile-toolbar-toggle { display: none; width: 100%; text-align: center; padding: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; font-weight: bold; cursor: pointer; color: var(--accent); font-size: 12px; }
+
   .planning-scroll { flex: 1; overflow-y: auto; overflow-x: auto; position: relative; scroll-behavior: smooth; }
   .planning-table { width: max-content; border-collapse: collapse; background: var(--surface); table-layout: fixed; }
   .planning-table thead th { position: sticky; top: 0; background: var(--accent) !important; color: white !important; padding: 10px 5px; border: 1px solid rgba(255,255,255,0.2); font-size: 11px; z-index: 150; text-align: center; width: 180px; }
@@ -177,9 +181,14 @@
     .topbar { flex-wrap: wrap; height: auto; padding: 10px; justify-content: space-between; gap: 10px; }
     .topbar > div:first-child { font-size: 11px; width: 100%; text-align: center; margin-bottom: 5px; }
     .year-tabs-container { justify-content: center; width: 100%; }
-    .planning-toolbar { flex-wrap: wrap; justify-content: center; padding: 10px; gap: 8px; }
-    .planning-toolbar > * { flex: 1 1 auto; margin: 0; text-align: center; font-size: 10px; padding: 8px; }
-    .search-container { width: 100%; flex-wrap: wrap; gap: 5px; }
+    
+    .planning-toolbar { padding: 10px; }
+    .mobile-toolbar-toggle { display: flex; justify-content: center; align-items: center; gap: 8px; }
+    .toolbar-items { display: none; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+    .toolbar-items.open { display: flex; }
+    .toolbar-items > * { flex: 1 1 auto; margin: 0; text-align: center; font-size: 10px; padding: 8px; }
+    
+    .search-container { width: 100%; flex-wrap: wrap; gap: 5px; margin-left: 0 !important; }
     .search-input { width: 100%; }
     .filter-select { width: 100%; }
     .modal { width: 95%; max-width: none; padding: 15px; }
@@ -192,6 +201,10 @@
     .stats-table th, .stats-table td { padding: 4px; font-size: 10px; }
     .zoom-container { display: none !important; }
   }
+  @media (max-width: 480px) {
+    .login-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
   @media print {
     body { background: white !important; font-size: 10px; }
     .topbar, .planning-toolbar, .zoom-container, #loginScreen, .modal-overlay, #toastMsg, #customTooltip { display: none !important; }
@@ -254,41 +267,48 @@
         <span>📋 Tâche copiée ! Cliquez sur une case pour coller.</span>
         <button onclick="cancelPasteMode()" style="background:rgba(255,255,255,0.2); border:1px solid white; color:white; padding:4px 10px; border-radius:4px; cursor:pointer;">Annuler</button>
     </div>
-    <button class="today-btn" onclick="scrollToToday()">🎯 AUJOURD'HUI</button>
     
-    <div class="search-container" style="margin-left: 0;">
-        <input type="date" id="jumpDate" class="search-input date-picker" onchange="jumpToDate(this.value)" title="Sauter à une date">
+    <div class="mobile-toolbar-toggle" onclick="toggleMobileToolbar()">
+        <span>🛠️ Outils & Filtres</span> <span id="toolbarArrow">▼</span>
     </div>
 
-    <div id="zoomControls" class="zoom-container">
-        <span class="zoom-label">NORMAL</span>
-        <input type="range" class="zoom-slider" min="0" max="1" step="1" value="0" oninput="handleZoom(this.value)">
-        <span class="zoom-label">GLOBAL</span>
-    </div>
-    
-    <button class="stats-btn" id="lockBtn" onclick="toggleLockPast()" style="display:none; background:var(--orange);">🔓 DÉVERROUILLÉ</button>
-    
-    <button class="fav-btn" onclick="openFavModal()">⭐ FAVORIS</button>
-    <button class="stats-btn" id="accessBtn" onclick="openAccessModal()" style="display:none; background:var(--green-hru);">🔐 ACCÈS</button>
-    <button class="stats-btn" id="historyBtn" onclick="openHistoryModal()" style="display:none; background:#8e44ad;">📜 HISTO</button>
-    <button class="stats-btn" id="statsBtn" onclick="openStatsModal()">📊 STATS</button>
-    
-    <div class="search-container">
-        <select id="viewFilter" onchange="renderPlanning()" class="filter-select" style="display:none;">
-            <option value="all">👀 TOUT VOIR</option>
-            <option value="prod">⚙️ PROD. SEULE (SANS ABS.)</option>
-            <option value="site">🚗 INTERVENTIONS SITE</option>
-            <option value="bureau">💻 RÉALISATION BUREAU</option>
-            <option value="livrables">📦 LIVRABLES & AO</option>
-            <option value="reunion">🤝 RÉUNIONS</option>
-            <option value="abs">🏖️ ABSENCES SEULES</option>
-        </select>
-        <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche..." onkeyup="renderPlanning()">
-    </div>
+    <div class="toolbar-items" id="toolbarItems">
+        <button class="today-btn" onclick="scrollToToday()">🎯 AUJOURD'HUI</button>
+        
+        <div class="search-container" style="margin-left: 0;">
+            <input type="date" id="jumpDate" class="search-input date-picker" onchange="jumpToDate(this.value)" title="Sauter à une date">
+        </div>
 
-    <button class="new-btn" id="newCollabBtn" onclick="openCollabModal()" style="margin-left: 10px;">➕ EQUIPE</button>
-    <button class="del-btn" id="delCollabBtn" onclick="openDeleteCollabModal()">❌ SUPP.</button>
-    <button class="trash-btn" id="trashBtn" onclick="openTrashModal()">🗑️ CORBEILLE</button>
+        <div id="zoomControls" class="zoom-container">
+            <span class="zoom-label">NORMAL</span>
+            <input type="range" class="zoom-slider" min="0" max="1" step="1" value="0" oninput="handleZoom(this.value)">
+            <span class="zoom-label">GLOBAL</span>
+        </div>
+        
+        <button class="stats-btn" id="lockBtn" onclick="toggleLockPast()" style="display:none; background:var(--orange);">🔓 DÉVERROUILLÉ</button>
+        
+        <button class="fav-btn" onclick="openFavModal()">⭐ FAVORIS</button>
+        <button class="stats-btn" id="accessBtn" onclick="openAccessModal()" style="display:none; background:var(--green-hru);">🔐 ACCÈS</button>
+        <button class="stats-btn" id="historyBtn" onclick="openHistoryModal()" style="display:none; background:#8e44ad;">📜 HISTO</button>
+        <button class="stats-btn" id="statsBtn" onclick="openStatsModal()">📊 STATS</button>
+        
+        <div class="search-container">
+            <select id="viewFilter" onchange="renderPlanning()" class="filter-select" style="display:none;">
+                <option value="all">👀 TOUT VOIR</option>
+                <option value="prod">⚙️ PROD. SEULE (SANS ABS.)</option>
+                <option value="site">🚗 INTERVENTIONS SITE</option>
+                <option value="bureau">💻 RÉALISATION BUREAU</option>
+                <option value="livrables">📦 LIVRABLES & AO</option>
+                <option value="reunion">🤝 RÉUNIONS</option>
+                <option value="abs">🏖️ ABSENCES SEULES</option>
+            </select>
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche..." onkeyup="renderPlanning()">
+        </div>
+
+        <button class="new-btn" id="newCollabBtn" onclick="openCollabModal()" style="margin-left: 10px;">➕ EQUIPE</button>
+        <button class="del-btn" id="delCollabBtn" onclick="openDeleteCollabModal()">❌ SUPP.</button>
+        <button class="trash-btn" id="trashBtn" onclick="openTrashModal()">🗑️ CORBEILLE</button>
+    </div>
   </div>
 
   <div class="planning-scroll" id="scrollContainer">
@@ -696,6 +716,18 @@ window.addEventListener('keydown', (e) => {
     } 
 });
 
+function toggleMobileToolbar() {
+    const items = document.getElementById('toolbarItems');
+    const arrow = document.getElementById('toolbarArrow');
+    if (items.classList.contains('open')) {
+        items.classList.remove('open');
+        arrow.textContent = '▼';
+    } else {
+        items.classList.add('open');
+        arrow.textContent = '▲';
+    }
+}
+
 function init() { 
     const grid = document.getElementById('profileGrid'); 
     if(!grid) return;
@@ -888,7 +920,7 @@ function formatText(command, value = null) {
 
 function handleContentEditableKeys(e) {
     const t = document.getElementById('taskType').value;
-    if (t !== 'Réalisation bureau') return; // Bloque les raccourcis pour les autres types
+    if (t !== 'Réalisation bureau') return; 
     
     if (e.ctrlKey || e.metaKey) {
         if (e.key.toLowerCase() === 'b') { e.preventDefault(); formatText('bold'); }
@@ -1027,7 +1059,7 @@ function showTooltip(e, task) {
     const nTxt = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
     const nAuth = noteData ? (typeof noteData === 'string' ? 'Inconnu' : noteData.author) : "";
 
-    // Suppression de l'ancienne bulle native du navigateur (title) gérée dans renderPlanning
+    // Conversion des anciens sauts de ligne si besoin
     const safeContent = (task.content || '').replace(/\n/g, '<br>');
 
     let html = `<div style="text-transform:uppercase; font-size:9px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">${task.type}</div>`;
@@ -1207,7 +1239,7 @@ function renderPlanning() {
                         const div = document.createElement('div'); div.className = "cell-absence"; 
                         div.innerHTML = `<span>${safeContent}</span>${noteIndicator}`;
                         
-                        div.removeAttribute('title'); // Suppression bulle native Windows
+                        div.removeAttribute('title'); 
                         
                         div.onmouseenter = (e) => { 
                             lastMouseE = e;
@@ -1242,7 +1274,7 @@ function renderPlanning() {
 
                         div.innerHTML = `${noteIndicator}<span class="task-desc">${safeContent}</span>${(task.type === "Réunion" || task.type === "Intervention site") && task.time ? `<span class="task-time-inline">⏰ ${task.time}</span>`:''}${task.location && (task.type === "Intervention site" || task.type === "Réunion") ? `<span class="task-location">📍 ${task.location}</span>`:''}`;
                         
-                        div.removeAttribute('title'); // Suppression bulle native Windows
+                        div.removeAttribute('title'); 
                         
                         div.onmouseenter = (e) => { 
                             lastMouseE = e;
@@ -1338,7 +1370,6 @@ function saveTask() {
   let contentVal = document.getElementById('taskContent').innerHTML;
   if(type === 'Absence') contentVal = document.getElementById('absenceVal').value;
   
-  // Nettoyer HTML si pas "Réalisation bureau" au cas où l'utilisateur change de type en cours de route
   if(type !== 'Réalisation bureau' && type !== 'Absence') {
       let tmpDiv = document.createElement("DIV"); tmpDiv.innerHTML = contentVal;
       contentVal = tmpDiv.textContent || tmpDiv.innerText;
