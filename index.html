@@ -238,7 +238,7 @@
         <button onclick="toggleDarkMode()" style="background:none; border:none; font-size:16px; cursor:pointer;" title="Mode Sombre">🌙</button>
         <div id="userInfo" style="font-size:11px; opacity:0.8;"></div>
         <button onclick="window.print()" style="padding:6px 12px; cursor:pointer; background:#ffffff; border:none; border-radius:4px; font-size:10px; font-weight:bold; color:#1a1a18;">🖨️ PDF</button>
-        <button id="exportBtn" onclick="exportData()" style="padding:6px 12px; cursor:pointer; background:rgba(255,255,255,0.2); border:1px solid white; border-radius:4px; font-size:10px; font-weight:bold; color:white; display:none;">💾 EXPORTER</button>
+        <button id="exportBtn" onclick="openExportModal()" style="padding:6px 12px; cursor:pointer; background:rgba(255,255,255,0.2); border:1px solid white; border-radius:4px; font-size:10px; font-weight:bold; color:white; display:none;">📅 EXPORT AGENDA</button>
         <button onclick="logoutApp()" style="padding:4px 10px; cursor:pointer; background:rgba(255,255,255,0.2); border:none; color:white; border-radius:4px;" title="Se déconnecter">✖</button>
     </div>
   </div>
@@ -290,6 +290,28 @@
       <thead id="planningHead"></thead>
       <tbody id="planningBody"></tbody>
     </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <h3>Exporter vers mon Agenda</h3>
+    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Sélectionnez une date. La semaine complète correspondante sera téléchargée au format .ics (compatible Google Agenda, Outlook, Apple).</p>
+    
+    <div class="form-group" id="exportCollabGroup" style="display:none;">
+        <label class="form-label">Agenda du collaborateur :</label>
+        <select id="exportCollab" class="form-input"></select>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">Date (pour identifier la semaine) :</label>
+        <input type="date" id="exportDate" class="form-input">
+    </div>
+    
+    <div class="btn-group">
+        <button onclick="closeModal('exportModal')" style="border:none; background:none; color:var(--text); cursor:pointer; width:auto; padding:8px 15px;">Annuler</button>
+        <button onclick="downloadICS()" style="background:var(--accent); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer;">Télécharger .ics</button>
+    </div>
   </div>
 </div>
 
@@ -641,7 +663,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === "Escape") { 
         if (clipboardTask) cancelPasteMode();
         hideTooltip();
-        closeModal('historyModal'); closeModal('accessModal'); closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); closeModal('trashModal'); closeModal('statsModal');
+        closeModal('exportModal'); closeModal('historyModal'); closeModal('accessModal'); closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); closeModal('trashModal'); closeModal('statsModal');
     } 
     
     if ((e.key === "Delete" || e.key === "Del") && document.getElementById('taskModal').classList.contains('open') && document.getElementById('editTaskId').value) { 
@@ -739,6 +761,8 @@ function doLogin() {
     
     const isEditor = state.user && state.user.isEditor;
 
+    document.getElementById('exportBtn').style.display = 'block'; // Actif pour tous !
+
     if(state.isAdmin) { 
         document.getElementById('userInfo').textContent = `🔧 Mode Admin (${state.user.name})`; 
         document.getElementById('accessBtn').style.display = 'block';
@@ -748,7 +772,6 @@ function doLogin() {
         document.getElementById('trashBtn').style.display = 'block'; 
         document.getElementById('addYearBtn').style.display = 'flex'; 
         document.getElementById('removeYearBtn').style.display = 'flex'; 
-        document.getElementById('exportBtn').style.display = 'block';
         document.getElementById('statsBtn').style.display = 'block';
         document.getElementById('viewFilter').style.display = 'inline-block';
         document.getElementById('lockBtn').style.display = 'block';
@@ -762,7 +785,6 @@ function doLogin() {
         document.getElementById('trashBtn').style.display = 'block'; 
         document.getElementById('addYearBtn').style.display = 'none'; 
         document.getElementById('removeYearBtn').style.display = 'none'; 
-        document.getElementById('exportBtn').style.display = 'none';
         document.getElementById('statsBtn').style.display = 'none';
         document.getElementById('viewFilter').style.display = 'none';
         document.getElementById('viewFilter').value = 'all'; 
@@ -773,7 +795,6 @@ function doLogin() {
         document.getElementById('historyBtn').style.display = 'none';
         document.getElementById('newCollabBtn').style.display = 'none'; 
         document.getElementById('delCollabBtn').style.display = 'none'; 
-        document.getElementById('exportBtn').style.display = 'none';
         document.getElementById('statsBtn').style.display = 'none';
         document.getElementById('viewFilter').style.display = 'none';
         document.getElementById('viewFilter').value = 'all'; 
@@ -834,6 +855,116 @@ function updateLockBtnUI() {
 }
 
 function getSortedCollabs() { let list = [...state.collabs]; if (state.customOrder) { list.sort((a, b) => state.customOrder.indexOf(a.code) - state.customOrder.indexOf(b.code)); } if (state.favCollab) { const fav = list.find(c => c.code === state.favCollab); if (fav) list = [fav, ...list.filter(c => c.code !== state.favCollab)]; } return list; }
+
+// --- EXPORT CALENDRIER ICS ---
+function openExportModal() {
+    document.getElementById('exportDate').value = getLocalDateString(new Date());
+    
+    if(state.isAdmin) {
+        document.getElementById('exportCollabGroup').style.display = 'block';
+        const sel = document.getElementById('exportCollab');
+        sel.innerHTML = state.collabs.map(c => `<option value="${c.code}">${c.code} - ${c.name}</option>`).join('');
+    } else {
+        document.getElementById('exportCollabGroup').style.display = 'none';
+    }
+    
+    document.getElementById('exportModal').classList.add('open');
+}
+
+function downloadICS() {
+    const dateVal = document.getElementById('exportDate').value;
+    if(!dateVal) return alert("Veuillez choisir une date.");
+    
+    let targetCollab = state.user.code;
+    if (state.isAdmin) targetCollab = document.getElementById('exportCollab').value;
+
+    const d = new Date(dateVal);
+    const day = d.getDay() || 7; 
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - day + 1);
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+    
+    const mondayStr = getLocalDateString(monday);
+    const sundayStr = getLocalDateString(sunday);
+
+    let events = state.tasks.filter(t => t.collab === targetCollab && t.date >= mondayStr && t.date <= sundayStr);
+    
+    if(events.length === 0) {
+        alert("Aucune tâche trouvée pour cette semaine.");
+        return;
+    }
+
+    let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//HRU Planning//FR\r\n";
+    const safeText = (text) => (text || '').replace(/[\r\n]+/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+
+    events.forEach(t => {
+        let [yy, mm, dd] = t.date.split('-');
+        
+        let startH = "09", startM = "00", endH = "12", endM = "00";
+        if (t.period === "Apr.Midi") { startH = "14"; endH = "18"; }
+        
+        let isAllDay = false;
+        if (t.type === "Absence") {
+            isAllDay = true;
+        } else if (t.time) {
+            let match = t.time.match(/(\d{1,2})[h:](\d{2})?/i);
+            if(match) {
+                startH = match[1].padStart(2, '0');
+                startM = match[2] ? match[2].padStart(2, '0') : "00";
+                endH = String(parseInt(startH) + 2).padStart(2, '0'); 
+                endM = startM;
+            }
+        }
+        
+        let dtStart = `${yy}${mm}${dd}T${startH}${startM}00`;
+        let dtEnd = `${yy}${mm}${dd}T${endH}${endM}00`;
+        
+        const noteData = state.notes && state.notes[t.id];
+        const nTxt = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
+        
+        let summary = safeText(`${t.type} - ${t.content}`);
+        let descParts = [`Type: ${t.type}`, `Description: ${t.content}`];
+        if(t.prestations) descParts.push(`Prestations: ${t.prestations}`);
+        if(nTxt) descParts.push(`Note: ${nTxt}`);
+        let desc = safeText(descParts.join('\n'));
+        let loc = safeText(t.location);
+
+        icsContent += "BEGIN:VEVENT\r\n";
+        icsContent += `UID:${t.id}@hru.fr\r\n`; 
+        if(isAllDay) {
+            let nextD = new Date(yy, parseInt(mm)-1, dd);
+            nextD.setDate(nextD.getDate() + 1);
+            let nyy = nextD.getFullYear(), nmm = String(nextD.getMonth()+1).padStart(2,'0'), ndd = String(nextD.getDate()).padStart(2,'0');
+            icsContent += `DTSTART;VALUE=DATE:${yy}${mm}${dd}\r\n`;
+            icsContent += `DTEND;VALUE=DATE:${nyy}${nmm}${ndd}\r\n`;
+        } else {
+            icsContent += `DTSTART:${dtStart}\r\n`;
+            icsContent += `DTEND:${dtEnd}\r\n`;
+        }
+        icsContent += `SUMMARY:${summary}\r\n`;
+        if (loc) icsContent += `LOCATION:${loc}\r\n`;
+        icsContent += `DESCRIPTION:${desc}\r\n`;
+        icsContent += "END:VEVENT\r\n";
+    });
+    
+    icsContent += "END:VCALENDAR";
+    
+    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `Agenda_${targetCollab}_S${getWeekNumber(new Date(dateVal))}.ics`;
+    link.click();
+    closeModal('exportModal');
+    showToast("📅 Agenda exporté !");
+}
+
+function getWeekNumber(d) {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+    var yearStart = new Date(Date.UTC(d.getUTCFullYear(),0,1));
+    return Math.ceil((((d - yearStart) / 86400000) + 1)/7);
+}
 
 // --- INFO BULLE SUR MESURE (AVEC DELAI) ---
 function showTooltip(e, task) {
@@ -1492,7 +1623,6 @@ function moveCollab(index, dir, e) { e.stopPropagation(); let list = getSortedCo
 function addNewYear() { const lastYear = Math.max(...state.years); const nextYear = lastYear + 1; if (confirm(`Ajouter l'année ${nextYear} ?`)) { state.years.push(nextYear); syncAdmin(); } }
 function removeCurrentYear() { if (state.currentYear === 2026) return alert("Interdit."); if (confirm(`Supprimer ${state.currentYear} ?`)) { state.years = state.years.filter(y => y !== state.currentYear); state.currentYear = 2026; syncAdmin(); } }
 function renderYearTabs() { const container = document.getElementById('yearTabs'); container.innerHTML = ""; state.years.sort().forEach(y => { const tab = document.createElement('div'); tab.className = `year-tab ${y === state.currentYear ? 'active' : ''}`; tab.textContent = `ANNEE ${y}`; tab.onclick = () => { state.currentYear = y; loadTasksForYear(y); renderYearTabs(); }; container.appendChild(tab); }); }
-function exportData() { const blob = new Blob([JSON.stringify({ tasks: state.tasks, collabs: state.collabs, years: state.years, trash: state.trash }, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `planning_global.json`; link.click(); }
 function openCollabModal() { document.getElementById('collabModal').classList.add('open'); }
 function saveCollab() { const pre = document.getElementById('newPre').value.trim(); const nom = document.getElementById('newNom').value.trim(); const tri = document.getElementById('newTri').value.trim().toUpperCase(); if(!pre || !tri) return alert("Données manquantes"); state.collabs.push({ code: tri, name: pre + " " + nom }); syncAdmin(); closeModal('collabModal'); }
 function openDeleteCollabModal() { const container = document.getElementById('collabDeleteList'); container.innerHTML = state.collabs.map(c => `<div class="collab-list-item"><span><b>${c.code}</b> — ${c.name}</span><button style="background:var(--red-light); color:var(--red); border:none; padding:5px; border-radius:4px; cursor:pointer;" onclick="deleteCollab('${c.code}')">✕</button></div>`).join(''); document.getElementById('deleteCollabModal').classList.add('open'); }
