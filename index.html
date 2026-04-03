@@ -144,6 +144,12 @@
   .form-input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 12px; }
   .btn-group { display: flex; justify-content: space-between; gap: 8px; margin-top: 15px; }
 
+  /* TOOLBAR RICH TEXT */
+  .rt-btn { width:22px; height:22px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:4px; background:var(--surface2); cursor:pointer; font-family:serif; font-size:12px; color:var(--text); transition:0.2s; }
+  .rt-btn:hover { background:var(--border); }
+  .rt-color { width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,0.2); cursor:pointer; display:inline-block; transition:transform 0.1s;}
+  .rt-color:hover { transform:scale(1.2); }
+
   .collab-flex { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 10px; }
   .collab-block { flex: 1; }
   .add-binome-btn { background: var(--accent-light); color: var(--accent); border: 1px dashed var(--accent); padding: 6px; border-radius: 4px; font-weight: bold; font-size: 10px; width: 100%; cursor: pointer; }
@@ -402,7 +408,28 @@
     
     <div class="form-group" id="groupColors"><label class="form-label">Couleur</label><div class="color-picker"><div class="palette-light"><div class="color-option" style="background:#E8EEF5" data-bg="#E8EEF5" data-text="#1A4373" onclick="selectColor(this)"></div><div class="color-option" style="background:#E6F3EE" data-bg="#E6F3EE" data-text="#1B5E44" onclick="selectColor(this)"></div><div class="color-option" style="background:#FDF3E3" data-bg="#FDF3E3" data-text="#8E5611" onclick="selectColor(this)"></div><div class="color-option" style="background:#FCEAE8" data-bg="#FCEAE8" data-text="#96281B" onclick="selectColor(this)"></div><div class="color-option" style="background:#F0EAF8" data-bg="#F0EAF8" data-text="#4D347A" onclick="selectColor(this)"></div><div class="color-option" style="background:#E0F7FA" data-bg="#E0F7FA" data-text="#006064" onclick="selectColor(this)"></div><div class="color-option" style="background:#D7CCC8" data-bg="#D7CCC8" data-text="#4E342E" onclick="selectColor(this)"></div></div><div class="palette-vivid"><div class="color-option" style="background:#1A4373" data-bg="#1A4373" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#2E7D5E" data-bg="#2E7D5E" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#C47A1A" data-bg="#C47A1A" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#C0392B" data-bg="#C0392B" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#6A1B9A" data-bg="#6A1B9A" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#00838F" data-bg="#00838F" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#37474F" data-bg="#37474F" data-text="#FFFFFF" onclick="selectColor(this)"></div></div></div></div>
     
-    <div class="form-group" id="groupContent"><label class="form-label">Description</label><textarea id="taskContent" class="form-input" rows="2"></textarea></div>
+    <div class="form-group" id="groupContent">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:4px;">
+            <label class="form-label" style="margin-bottom:0;">Description</label>
+            <div style="display:flex; gap:5px; align-items:center;">
+                <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('bold')" title="Gras (Ctrl+B)"><b>B</b></button>
+                <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('italic')" title="Italique (Ctrl+I)"><i>I</i></button>
+                <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('underline')" title="Souligné (Ctrl+U)"><u>U</u></button>
+                <div style="width:1px; height:12px; background:var(--border); margin:0 2px;"></div>
+                <span class="rt-color" style="background:#ff0000" onmousedown="event.preventDefault(); formatText('foreColor', '#ff0000')" title="Rouge"></span>
+                <span class="rt-color" style="background:#ff9900" onmousedown="event.preventDefault(); formatText('foreColor', '#ff9900')" title="Orange"></span>
+                <span class="rt-color" style="background:#ffcc00" onmousedown="event.preventDefault(); formatText('foreColor', '#ffcc00')" title="Jaune"></span>
+                <span class="rt-color" style="background:#00cc00" onmousedown="event.preventDefault(); formatText('foreColor', '#00cc00')" title="Vert"></span>
+                <span class="rt-color" style="background:#00cccc" onmousedown="event.preventDefault(); formatText('foreColor', '#00cccc')" title="Cyan"></span>
+                <span class="rt-color" style="background:#0066ff" onmousedown="event.preventDefault(); formatText('foreColor', '#0066ff')" title="Bleu"></span>
+                <span class="rt-color" style="background:#9900ff" onmousedown="event.preventDefault(); formatText('foreColor', '#9900ff')" title="Violet"></span>
+                <span class="rt-color" style="background:#ff00ff" onmousedown="event.preventDefault(); formatText('foreColor', '#ff00ff')" title="Magenta"></span>
+                <div style="width:1px; height:12px; background:var(--border); margin:0 2px;"></div>
+                <button type="button" class="rt-btn" onmousedown="event.preventDefault(); document.execCommand('removeFormat', false, null)" title="Effacer la mise en forme" style="font-size:10px;">🧽</button>
+            </div>
+        </div>
+        <div id="taskContent" class="form-input" contenteditable="true" onkeydown="handleContentEditableKeys(event)" onpaste="handlePaste(event)" style="min-height: 60px; max-height: 150px; overflow-y: auto; background: var(--surface);"></div>
+    </div>
     
     <div class="collab-flex" id="timeRow">
         <div class="collab-block" id="groupTime" style="display:none"><label class="form-label">Horaire précis</label><input type="text" id="taskTime" class="form-input" placeholder="ex: 09h00"></div>
@@ -648,15 +675,13 @@ function toggleDarkMode() {
 if(localStorage.getItem('hru_darkmode') === 'true') document.body.classList.add('dark-mode');
 
 window.addEventListener('keydown', (e) => { 
-    const isInputFocused = document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA';
-
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
-        if (isInputFocused) return; 
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable) return; 
         e.preventDefault(); 
         if(e.shiftKey) redoAction(); else undoAction(); 
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { 
-        if (isInputFocused) return; 
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable) return; 
         e.preventDefault(); redoAction(); 
     }
     
@@ -667,7 +692,7 @@ window.addEventListener('keydown', (e) => {
     } 
     
     if ((e.key === "Delete" || e.key === "Del") && document.getElementById('taskModal').classList.contains('open') && document.getElementById('editTaskId').value) { 
-        if (isInputFocused) return; 
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable) return; 
         deleteTask(); 
     } 
 });
@@ -761,7 +786,7 @@ function doLogin() {
     
     const isEditor = state.user && state.user.isEditor;
 
-    document.getElementById('exportBtn').style.display = 'block'; // Actif pour tous !
+    document.getElementById('exportBtn').style.display = 'block';
 
     if(state.isAdmin) { 
         document.getElementById('userInfo').textContent = `🔧 Mode Admin (${state.user.name})`; 
@@ -856,6 +881,26 @@ function updateLockBtnUI() {
 
 function getSortedCollabs() { let list = [...state.collabs]; if (state.customOrder) { list.sort((a, b) => state.customOrder.indexOf(a.code) - state.customOrder.indexOf(b.code)); } if (state.favCollab) { const fav = list.find(c => c.code === state.favCollab); if (fav) list = [fav, ...list.filter(c => c.code !== state.favCollab)]; } return list; }
 
+// --- EDITEUR DE TEXTE ENRICHI ---
+function formatText(command, value = null) {
+    document.getElementById('taskContent').focus();
+    document.execCommand(command, false, value);
+}
+
+function handleContentEditableKeys(e) {
+    if (e.ctrlKey || e.metaKey) {
+        if (e.key.toLowerCase() === 'b') { e.preventDefault(); formatText('bold'); }
+        if (e.key.toLowerCase() === 'i') { e.preventDefault(); formatText('italic'); }
+        if (e.key.toLowerCase() === 'u') { e.preventDefault(); formatText('underline'); }
+    }
+}
+
+function handlePaste(e) {
+    e.preventDefault();
+    const text = (e.originalEvent || e).clipboardData.getData('text/plain');
+    document.execCommand('insertText', false, text);
+}
+
 // --- EXPORT CALENDRIER ICS ---
 function openExportModal() {
     document.getElementById('exportDate').value = getLocalDateString(new Date());
@@ -896,7 +941,15 @@ function downloadICS() {
     }
 
     let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//HRU Planning//FR\r\n";
-    const safeText = (text) => (text || '').replace(/[\r\n]+/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+    
+    // Nettoyer le HTML pour l'export calendrier
+    const stripHtml = (html) => {
+        let tmp = document.createElement("DIV");
+        tmp.innerHTML = html;
+        return tmp.textContent || tmp.innerText || "";
+    };
+    
+    const safeText = (text) => stripHtml(text || '').replace(/[\r\n]+/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
 
     events.forEach(t => {
         let [yy, mm, dd] = t.date.split('-');
@@ -924,7 +977,7 @@ function downloadICS() {
         const nTxt = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
         
         let summary = safeText(`${t.type} - ${t.content}`);
-        let descParts = [`Type: ${t.type}`, `Description: ${t.content}`];
+        let descParts = [`Type: ${t.type}`, `Description: ${stripHtml(t.content)}`];
         if(t.prestations) descParts.push(`Prestations: ${t.prestations}`);
         if(nTxt) descParts.push(`Note: ${nTxt}`);
         let desc = safeText(descParts.join('\n'));
@@ -973,6 +1026,7 @@ function showTooltip(e, task) {
     const nTxt = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
     const nAuth = noteData ? (typeof noteData === 'string' ? 'Inconnu' : noteData.author) : "";
 
+    // Conversion des anciens sauts de ligne si besoin
     const safeContent = (task.content || '').replace(/\n/g, '<br>');
 
     let html = `<div style="text-transform:uppercase; font-size:9px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">${task.type}</div>`;
@@ -1111,7 +1165,10 @@ function renderPlanning() {
                                 draggedTask.date = dStr; draggedTask.period = p; draggedTask.collab = c.code; draggedTask.position = Date.now();
                             }
                             syncTasks(); draggedTaskId = null; 
-                            logAction("Déplacement", draggedTask.content);
+                            
+                            // Nettoyer HTML pour l'historique
+                            let tmp = document.createElement("DIV"); tmp.innerHTML = draggedTask.content;
+                            logAction("Déplacement", tmp.textContent || tmp.innerText);
                         }
                     };
                 }
@@ -1198,7 +1255,8 @@ function renderPlanning() {
                         };
                         
                         if (searchTerm) {
-                            const textString = `${task.content} ${task.location} ${task.type}`.toLowerCase();
+                            let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
+                            const textString = `${tmp.textContent} ${task.location} ${task.type}`.toLowerCase();
                             if (!textString.includes(searchTerm)) div.classList.add('dimmed');
                             else cellHasMatch = true;
                         } else {
@@ -1232,7 +1290,9 @@ function pasteTask(date, period, collab) {
   saveHistory();
   state.tasks.push({ ...clipboardTask, id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), date: date, period: period, collab: collab, position: Date.now() }); 
   syncTasks();
-  logAction("Copie", clipboardTask.content);
+  
+  let tmp = document.createElement("DIV"); tmp.innerHTML = clipboardTask.content;
+  logAction("Copie", tmp.textContent || tmp.innerText);
   showToast("📋 Collé"); 
 }
 
@@ -1272,9 +1332,12 @@ function saveTask() {
   const existingTask = id ? state.tasks.find(x => String(x.id) === String(id)) : null;
 
   const baseData = {
-    type: type, content: type === 'Absence' ? document.getElementById('absenceVal').value : document.getElementById('taskContent').value,
-    location: document.getElementById('taskLocation').value, time: document.getElementById('taskTime').value,
-    prestations: document.getElementById('taskPrestations').value, url: urlValue, bg: selectedBg, textColor: selectedTextColor, position: existingTask ? existingTask.position : Date.now()
+    type: type, 
+    content: type === 'Absence' ? document.getElementById('absenceVal').value : document.getElementById('taskContent').innerHTML,
+    location: document.getElementById('taskLocation').value, 
+    time: document.getElementById('taskTime').value,
+    prestations: document.getElementById('taskPrestations').value, 
+    url: urlValue, bg: selectedBg, textColor: selectedTextColor, position: existingTask ? existingTask.position : Date.now()
   };
 
   let tasksToUpdateNotes = [];
@@ -1381,7 +1444,10 @@ function saveTask() {
   });
 
   syncTasks(); 
-  logAction(id ? "Modification" : "Création", baseData.content);
+  
+  let tmp = document.createElement("DIV"); tmp.innerHTML = baseData.content;
+  logAction(id ? "Modification" : "Création", tmp.textContent || tmp.innerText);
+  
   closeModal('taskModal');
   showToast("💾 Enregistré");
 }
@@ -1398,7 +1464,7 @@ function prepareForNewTask() {
     document.getElementById('taskBinome').style.display = 'none';
     document.getElementById('editTaskId').value = ''; 
     document.getElementById('taskGroupId').value = ''; 
-    document.getElementById('taskContent').value = ''; 
+    document.getElementById('taskContent').innerHTML = ''; 
     document.getElementById('taskLocation').value = ''; 
     document.getElementById('taskPrestations').value = ''; 
     document.getElementById('taskTime').value = ''; 
@@ -1412,7 +1478,25 @@ function prepareForNewTask() {
 function openFavModal() { const container = document.getElementById('collabFavList'); container.innerHTML = ""; const list = getSortedCollabs(); list.forEach((c, index) => { const isSelectedFav = state.favCollab === c.code; const item = document.createElement('div'); item.className = `collab-list-item ${isSelectedFav ? 'is-fav' : ''}`; item.innerHTML = `<div onclick="setFav('${c.code}')"><b>${c.code} — ${c.name}</b>${isSelectedFav ? '<span class="fav-star">⭐</span>' : ''}</div><div style="display:flex;gap:5px;"><button class="move-btn" onclick="moveCollab(${index},-1,event)">↑</button><button class="move-btn" onclick="moveCollab(${index},1,event)">↓</button></div>`; container.appendChild(item); }); document.getElementById('favModal').classList.add('open'); }
 function setFav(code) { state.favCollab = code; localStorage.setItem('hru_fav', code); openFavModal(); renderPlanning(); }
 function resetFav() { state.favCollab = null; state.customOrder = null; localStorage.removeItem('hru_fav'); localStorage.removeItem('hru_order'); closeModal('favModal'); renderPlanning(); }
-function deleteTask() { saveHistory(); const id = document.getElementById('editTaskId').value; const tIdx = state.tasks.findIndex(t => String(t.id) === String(id)); if (tIdx > -1) { const task = state.tasks[tIdx]; task.deletedAt = Date.now(); state.trash.push(task); state.tasks.splice(tIdx, 1); syncTasks(); syncTrash(); logAction("Suppression", task.content); closeModal('taskModal'); showToast("🗑️ Supprimé"); } }
+function deleteTask() { 
+    saveHistory(); 
+    const id = document.getElementById('editTaskId').value; 
+    const tIdx = state.tasks.findIndex(t => String(t.id) === String(id)); 
+    if (tIdx > -1) { 
+        const task = state.tasks[tIdx]; 
+        task.deletedAt = Date.now(); 
+        state.trash.push(task); 
+        state.tasks.splice(tIdx, 1); 
+        syncTasks(); 
+        syncTrash(); 
+        
+        let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
+        logAction("Suppression", tmp.textContent || tmp.innerText); 
+        
+        closeModal('taskModal'); 
+        showToast("🗑️ Supprimé"); 
+    } 
+}
 
 function openTrashModal() { 
     const list = document.getElementById('trashList'); 
@@ -1421,7 +1505,8 @@ function openTrashModal() {
     state.trash.sort((a,b) => b.deletedAt - a.deletedAt).forEach((t, idx) => { 
         const item = document.createElement('div'); 
         item.className = 'trash-list-item'; 
-        item.innerHTML = `<div><div style="font-weight:bold;">${t.collab} : ${t.content}</div><div style="font-size:10px; color:var(--text-muted);">${t.date}</div></div><button class="restore-btn" onclick="restoreTask(${idx})">RESTAURER</button>`; 
+        let tmp = document.createElement("DIV"); tmp.innerHTML = t.content;
+        item.innerHTML = `<div><div style="font-weight:bold;">${t.collab} : ${tmp.textContent || tmp.innerText}</div><div style="font-size:10px; color:var(--text-muted);">${t.date}</div></div><button class="restore-btn" onclick="restoreTask(${idx})">RESTAURER</button>`; 
         list.appendChild(item); 
     }); 
     document.getElementById('trashModal').classList.add('open'); 
@@ -1438,7 +1523,20 @@ function emptyTrash() {
     } 
 }
 
-function restoreTask(indexInTrash) { saveHistory(); const task = state.trash.splice(indexInTrash, 1)[0]; delete task.deletedAt; state.tasks.push(task); syncTasks(); syncTrash(); logAction("Restauration", task.content); openTrashModal(); showToast("✅ Restauré"); }
+function restoreTask(indexInTrash) { 
+    saveHistory(); 
+    const task = state.trash.splice(indexInTrash, 1)[0]; 
+    delete task.deletedAt; 
+    state.tasks.push(task); 
+    syncTasks(); 
+    syncTrash(); 
+    
+    let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
+    logAction("Restauration", tmp.textContent || tmp.innerText); 
+    
+    openTrashModal(); 
+    showToast("✅ Restauré"); 
+}
 function cleanTrash() { const h48 = 48 * 3600 * 1000; const now = Date.now(); state.trash = state.trash.filter(t => (now - t.deletedAt) < h48); syncTrash(); }
 
 function openConsultationTask(task) { 
@@ -1500,7 +1598,9 @@ function saveNote() {
         }
     });
 
-    logAction(noteText.trim() === "" ? "Suppression Note" : "Modif. Note", task ? task.content : "");
+    let tmp = document.createElement("DIV"); tmp.innerHTML = task ? task.content : "";
+    logAction(noteText.trim() === "" ? "Suppression Note" : "Modif. Note", tmp.textContent || tmp.innerText);
+    
     showToast(noteText.trim() === "" ? "📝 Note supprimée" : "📝 Note enregistrée");
     closeModal('viewModal');
 }
@@ -1517,7 +1617,7 @@ function openModalTask(task) {
   document.getElementById('editTaskId').value = task.id || '';
   document.getElementById('taskGroupId').value = task.groupId || '';
   document.getElementById('taskCollab').value = task.collab;
-  document.getElementById('taskContent').value = task.content || '';
+  document.getElementById('taskContent').innerHTML = task.content || '';
   document.getElementById('taskLocation').value = task.location || '';
   document.getElementById('taskTime').value = task.time || '';
   document.getElementById('taskPrestations').value = task.prestations || '';
@@ -1638,7 +1738,10 @@ function handleInvert(targetId) {
     t.date = s.date; t.period = s.period; t.collab = s.collab; t.position = s.position; 
     s.date = tmp.date; s.period = tmp.period; s.collab = tmp.collab; s.position = tmp.pos; 
     syncTasks(); draggedTaskId = null; 
-    logAction("Inversion de tâches", `${s.content} avec ${t.content}`);
+    
+    let tmpS = document.createElement("DIV"); tmpS.innerHTML = s.content;
+    let tmpT = document.createElement("DIV"); tmpT.innerHTML = t.content;
+    logAction("Inversion de tâches", `${tmpS.textContent || tmpS.innerText} avec ${tmpT.textContent || tmpT.innerText}`);
 }
 
 function getLocalDateString(date) { let d = new Date(date); let m = '' + (d.getMonth() + 1); let dy = '' + d.getDate(); if (m.length < 2) m = '0' + m; if (dy.length < 2) dy = '0' + dy; return [d.getFullYear(), m, dy].join('-'); }
