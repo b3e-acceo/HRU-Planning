@@ -82,7 +82,12 @@
 
   #app { display: none; flex-direction: column; height: 100vh; }
   #app.visible { display: flex; }
+  
+  /* --- CLASSES MODIFIÉES POUR LA TOPBAR --- */
   .topbar { background: var(--accent); color: white; padding: 0 20px; height: 50px; display: flex; align-items: center; gap: 20px; flex-shrink: 0; }
+  .topbar-title { font-weight: bold; font-family: 'Space Mono'; flex-shrink: 0; }
+  .topbar-controls { display: flex; gap: 10px; margin-left: auto; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  
   .year-tabs-container { display: flex; align-items: flex-end; height: 100%; gap: 5px; }
   .year-tabs { display: flex; gap: 5px; align-items: flex-end; height: 100%; }
   .year-tab { padding: 8px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-bottom: none; border-radius: 6px 6px 0 0; color: rgba(255,255,255,0.6); cursor: pointer; font-family: 'Space Mono'; font-size: 11px; font-weight: bold; transition: 0.2s; }
@@ -91,7 +96,7 @@
   .add-year-btn { background: rgba(255,255,255,0.2); }
   .remove-year-btn { background: rgba(255,255,255,0.2); }
 
-  /* --- NOUVELLE STRUCTURE TOOLBAR --- */
+  /* --- TOOLBAR DESCRIPTIONS --- */
   .planning-toolbar { background: var(--surface); padding: 10px 20px; border-bottom: 1px solid var(--border); display: block; flex-shrink: 0; position: relative; }
   .toolbar-items { display: flex; align-items: center; gap: 10px; width: 100%; }
   .mobile-toolbar-toggle { display: none; width: 100%; text-align: center; padding: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; font-weight: bold; cursor: pointer; color: var(--accent); font-size: 12px; }
@@ -177,10 +182,36 @@
   
   #toastMsg { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1a1a18; color: white; padding: 10px 25px; border-radius: 30px; font-weight: bold; font-family: 'Space Mono'; font-size: 11px; z-index: 9999; opacity: 0; pointer-events: none; transition: 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 
+  /* ========================================================
+     MODIFICATIONS POUR VERSION MOBILE (FIX DE LA BANDE BLEUE)
+     ======================================================== */
   @media (max-width: 768px) {
-    .topbar { flex-wrap: wrap; height: auto; padding: 10px; justify-content: space-between; gap: 10px; }
-    .topbar > div:first-child { font-size: 11px; width: 100%; text-align: center; margin-bottom: 5px; }
-    .year-tabs-container { justify-content: center; width: 100%; }
+    .topbar { 
+        flex-direction: column; 
+        padding: 12px 10px 0 10px; 
+        height: auto; 
+        gap: 10px; 
+    }
+    .topbar-title { 
+        width: 100%; 
+        text-align: center; 
+        font-size: 14px; 
+        margin-bottom: 0; 
+        order: 1; 
+    }
+    .topbar-controls { 
+        width: 100%; 
+        margin-left: 0; 
+        justify-content: center; 
+        order: 2; 
+        padding-bottom: 5px; 
+    }
+    .year-tabs-container { 
+        width: 100%; 
+        justify-content: center; 
+        order: 3; 
+        height: auto; 
+    }
     
     .planning-toolbar { padding: 10px; }
     .mobile-toolbar-toggle { display: flex; justify-content: center; align-items: center; gap: 8px; }
@@ -247,13 +278,15 @@
 
 <div id="app">
   <div class="topbar">
-    <div style="font-weight:bold; font-family:'Space Mono'; flex-shrink:0;">⬡ PLANNING PRODUCTION HRU</div>
+    <div class="topbar-title">⬡ PLANNING PRODUCTION HRU</div>
+    
     <div class="year-tabs-container">
         <div class="year-tabs" id="yearTabs"></div>
         <button id="addYearBtn" class="add-year-btn" onclick="addNewYear()" title="Ajouter l'année suivante">+</button>
         <button id="removeYearBtn" class="remove-year-btn" onclick="removeCurrentYear()" title="Supprimer l'année en cours">-</button>
     </div>
-    <div style="display:flex; gap:10px; margin-left:auto; align-items:center; flex-wrap:wrap; justify-content:center;">
+    
+    <div class="topbar-controls">
         <button onclick="toggleDarkMode()" style="background:none; border:none; font-size:16px; cursor:pointer;" title="Mode Sombre">🌙</button>
         <div id="userInfo" style="font-size:11px; opacity:0.8;"></div>
         <button onclick="window.print()" style="padding:6px 12px; cursor:pointer; background:#ffffff; border:none; border-radius:4px; font-size:10px; font-weight:bold; color:#1a1a18;">🖨️ PDF</button>
@@ -1059,7 +1092,6 @@ function showTooltip(e, task) {
     const nTxt = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
     const nAuth = noteData ? (typeof noteData === 'string' ? 'Inconnu' : noteData.author) : "";
 
-    // Conversion des anciens sauts de ligne si besoin
     const safeContent = (task.content || '').replace(/\n/g, '<br>');
 
     let html = `<div style="text-transform:uppercase; font-size:9px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">${task.type}</div>`;
@@ -1768,6 +1800,7 @@ function moveCollab(index, dir, e) { e.stopPropagation(); let list = getSortedCo
 function addNewYear() { const lastYear = Math.max(...state.years); const nextYear = lastYear + 1; if (confirm(`Ajouter l'année ${nextYear} ?`)) { state.years.push(nextYear); syncAdmin(); } }
 function removeCurrentYear() { if (state.currentYear === 2026) return alert("Interdit."); if (confirm(`Supprimer ${state.currentYear} ?`)) { state.years = state.years.filter(y => y !== state.currentYear); state.currentYear = 2026; syncAdmin(); } }
 function renderYearTabs() { const container = document.getElementById('yearTabs'); container.innerHTML = ""; state.years.sort().forEach(y => { const tab = document.createElement('div'); tab.className = `year-tab ${y === state.currentYear ? 'active' : ''}`; tab.textContent = `ANNEE ${y}`; tab.onclick = () => { state.currentYear = y; loadTasksForYear(y); renderYearTabs(); }; container.appendChild(tab); }); }
+function exportData() { const blob = new Blob([JSON.stringify({ tasks: state.tasks, collabs: state.collabs, years: state.years, trash: state.trash }, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `planning_global.json`; link.click(); }
 function openCollabModal() { document.getElementById('collabModal').classList.add('open'); }
 function saveCollab() { const pre = document.getElementById('newPre').value.trim(); const nom = document.getElementById('newNom').value.trim(); const tri = document.getElementById('newTri').value.trim().toUpperCase(); if(!pre || !tri) return alert("Données manquantes"); state.collabs.push({ code: tri, name: pre + " " + nom }); syncAdmin(); closeModal('collabModal'); }
 function openDeleteCollabModal() { const container = document.getElementById('collabDeleteList'); container.innerHTML = state.collabs.map(c => `<div class="collab-list-item"><span><b>${c.code}</b> — ${c.name}</span><button style="background:var(--red-light); color:var(--red); border:none; padding:5px; border-radius:4px; cursor:pointer;" onclick="deleteCollab('${c.code}')">✕</button></div>`).join(''); document.getElementById('deleteCollabModal').classList.add('open'); }
