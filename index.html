@@ -409,26 +409,25 @@
     <div class="form-group" id="groupColors"><label class="form-label">Couleur</label><div class="color-picker"><div class="palette-light"><div class="color-option" style="background:#E8EEF5" data-bg="#E8EEF5" data-text="#1A4373" onclick="selectColor(this)"></div><div class="color-option" style="background:#E6F3EE" data-bg="#E6F3EE" data-text="#1B5E44" onclick="selectColor(this)"></div><div class="color-option" style="background:#FDF3E3" data-bg="#FDF3E3" data-text="#8E5611" onclick="selectColor(this)"></div><div class="color-option" style="background:#FCEAE8" data-bg="#FCEAE8" data-text="#96281B" onclick="selectColor(this)"></div><div class="color-option" style="background:#F0EAF8" data-bg="#F0EAF8" data-text="#4D347A" onclick="selectColor(this)"></div><div class="color-option" style="background:#E0F7FA" data-bg="#E0F7FA" data-text="#006064" onclick="selectColor(this)"></div><div class="color-option" style="background:#D7CCC8" data-bg="#D7CCC8" data-text="#4E342E" onclick="selectColor(this)"></div></div><div class="palette-vivid"><div class="color-option" style="background:#1A4373" data-bg="#1A4373" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#2E7D5E" data-bg="#2E7D5E" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#C47A1A" data-bg="#C47A1A" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#C0392B" data-bg="#C0392B" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#6A1B9A" data-bg="#6A1B9A" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#00838F" data-bg="#00838F" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#37474F" data-bg="#37474F" data-text="#FFFFFF" onclick="selectColor(this)"></div></div></div></div>
     
     <div class="form-group" id="groupContent">
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:4px;">
-            <label class="form-label" style="margin-bottom:0;">Description</label>
-            <div style="display:flex; gap:5px; align-items:center;">
-                <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('bold')" title="Gras (Ctrl+B)"><b>B</b></button>
-                <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('italic')" title="Italique (Ctrl+I)"><i>I</i></button>
-                <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('underline')" title="Souligné (Ctrl+U)"><u>U</u></button>
-                <div style="width:1px; height:12px; background:var(--border); margin:0 2px;"></div>
-                <span class="rt-color" style="background:#ff0000" onmousedown="event.preventDefault(); formatText('foreColor', '#ff0000')" title="Rouge"></span>
-                <span class="rt-color" style="background:#ff9900" onmousedown="event.preventDefault(); formatText('foreColor', '#ff9900')" title="Orange"></span>
-                <span class="rt-color" style="background:#ffcc00" onmousedown="event.preventDefault(); formatText('foreColor', '#ffcc00')" title="Jaune"></span>
-                <span class="rt-color" style="background:#00cc00" onmousedown="event.preventDefault(); formatText('foreColor', '#00cc00')" title="Vert"></span>
-                <span class="rt-color" style="background:#00cccc" onmousedown="event.preventDefault(); formatText('foreColor', '#00cccc')" title="Cyan"></span>
-                <span class="rt-color" style="background:#0066ff" onmousedown="event.preventDefault(); formatText('foreColor', '#0066ff')" title="Bleu"></span>
-                <span class="rt-color" style="background:#9900ff" onmousedown="event.preventDefault(); formatText('foreColor', '#9900ff')" title="Violet"></span>
-                <span class="rt-color" style="background:#ff00ff" onmousedown="event.preventDefault(); formatText('foreColor', '#ff00ff')" title="Magenta"></span>
-                <div style="width:1px; height:12px; background:var(--border); margin:0 2px;"></div>
-                <button type="button" class="rt-btn" onmousedown="event.preventDefault(); document.execCommand('removeFormat', false, null)" title="Effacer la mise en forme" style="font-size:10px;">🧽</button>
-            </div>
-        </div>
+        <label class="form-label" style="margin-bottom:4px;">Description</label>
         <div id="taskContent" class="form-input" contenteditable="true" onkeydown="handleContentEditableKeys(event)" onpaste="handlePaste(event)" style="min-height: 60px; max-height: 150px; overflow-y: auto; background: var(--surface);"></div>
+        
+        <div id="richTextToolbar" style="display:none; gap:5px; align-items:center; margin-top:6px; justify-content:flex-end;">
+            <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('bold')" title="Gras (Ctrl+B)"><b>B</b></button>
+            <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('italic')" title="Italique (Ctrl+I)"><i>I</i></button>
+            <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('underline')" title="Souligné (Ctrl+U)"><u>U</u></button>
+            <div style="width:1px; height:12px; background:var(--border); margin:0 2px;"></div>
+            <span class="rt-color" style="background:#ff0000" onmousedown="event.preventDefault(); formatText('foreColor', '#ff0000')" title="Rouge"></span>
+            <span class="rt-color" style="background:#ff9900" onmousedown="event.preventDefault(); formatText('foreColor', '#ff9900')" title="Orange"></span>
+            <span class="rt-color" style="background:#ffcc00" onmousedown="event.preventDefault(); formatText('foreColor', '#ffcc00')" title="Jaune"></span>
+            <span class="rt-color" style="background:#00cc00" onmousedown="event.preventDefault(); formatText('foreColor', '#00cc00')" title="Vert"></span>
+            <span class="rt-color" style="background:#00cccc" onmousedown="event.preventDefault(); formatText('foreColor', '#00cccc')" title="Cyan"></span>
+            <span class="rt-color" style="background:#0066ff" onmousedown="event.preventDefault(); formatText('foreColor', '#0066ff')" title="Bleu"></span>
+            <span class="rt-color" style="background:#9900ff" onmousedown="event.preventDefault(); formatText('foreColor', '#9900ff')" title="Violet"></span>
+            <span class="rt-color" style="background:#ff00ff" onmousedown="event.preventDefault(); formatText('foreColor', '#ff00ff')" title="Magenta"></span>
+            <div style="width:1px; height:12px; background:var(--border); margin:0 2px;"></div>
+            <button type="button" class="rt-btn" onmousedown="event.preventDefault(); document.execCommand('removeFormat', false, null)" title="Effacer la mise en forme" style="font-size:10px;">🧽</button>
+        </div>
     </div>
     
     <div class="collab-flex" id="timeRow">
@@ -888,6 +887,9 @@ function formatText(command, value = null) {
 }
 
 function handleContentEditableKeys(e) {
+    const t = document.getElementById('taskType').value;
+    if (t !== 'Réalisation bureau') return; // Bloque les raccourcis pour les autres types
+    
     if (e.ctrlKey || e.metaKey) {
         if (e.key.toLowerCase() === 'b') { e.preventDefault(); formatText('bold'); }
         if (e.key.toLowerCase() === 'i') { e.preventDefault(); formatText('italic'); }
@@ -942,7 +944,6 @@ function downloadICS() {
 
     let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//HRU Planning//FR\r\n";
     
-    // Nettoyer le HTML pour l'export calendrier
     const stripHtml = (html) => {
         let tmp = document.createElement("DIV");
         tmp.innerHTML = html;
@@ -1026,11 +1027,11 @@ function showTooltip(e, task) {
     const nTxt = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
     const nAuth = noteData ? (typeof noteData === 'string' ? 'Inconnu' : noteData.author) : "";
 
-    // Conversion des anciens sauts de ligne si besoin
+    // Suppression de l'ancienne bulle native du navigateur (title) gérée dans renderPlanning
     const safeContent = (task.content || '').replace(/\n/g, '<br>');
 
     let html = `<div style="text-transform:uppercase; font-size:9px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">${task.type}</div>`;
-    html += `<div style="font-size:12px; font-weight:bold; margin-bottom:6px;">${safeContent}</div>`;
+    html += `<div style="font-size:12px; font-weight:normal; margin-bottom:6px;">${safeContent}</div>`;
 
     if(task.time) html += `<div><b>⏰ Horaire:</b> ${task.time}</div>`;
     if(task.location) html += `<div><b>📍 Lieu:</b> ${task.location}</div>`;
@@ -1166,7 +1167,6 @@ function renderPlanning() {
                             }
                             syncTasks(); draggedTaskId = null; 
                             
-                            // Nettoyer HTML pour l'historique
                             let tmp = document.createElement("DIV"); tmp.innerHTML = draggedTask.content;
                             logAction("Déplacement", tmp.textContent || tmp.innerText);
                         }
@@ -1207,6 +1207,8 @@ function renderPlanning() {
                         const div = document.createElement('div'); div.className = "cell-absence"; 
                         div.innerHTML = `<span>${safeContent}</span>${noteIndicator}`;
                         
+                        div.removeAttribute('title'); // Suppression bulle native Windows
+                        
                         div.onmouseenter = (e) => { 
                             lastMouseE = e;
                             clearTimeout(tooltipTimeout);
@@ -1239,6 +1241,8 @@ function renderPlanning() {
                         else if (!task.type.includes("Envoi") && task.type !== "Réunion") { div.style.background = task.bg; div.style.color = task.textColor; div.style.borderLeftColor = task.textColor; }
 
                         div.innerHTML = `${noteIndicator}<span class="task-desc">${safeContent}</span>${(task.type === "Réunion" || task.type === "Intervention site") && task.time ? `<span class="task-time-inline">⏰ ${task.time}</span>`:''}${task.location && (task.type === "Intervention site" || task.type === "Réunion") ? `<span class="task-location">📍 ${task.location}</span>`:''}`;
+                        
+                        div.removeAttribute('title'); // Suppression bulle native Windows
                         
                         div.onmouseenter = (e) => { 
                             lastMouseE = e;
@@ -1331,13 +1335,19 @@ function saveTask() {
   
   const existingTask = id ? state.tasks.find(x => String(x.id) === String(id)) : null;
 
+  let contentVal = document.getElementById('taskContent').innerHTML;
+  if(type === 'Absence') contentVal = document.getElementById('absenceVal').value;
+  
+  // Nettoyer HTML si pas "Réalisation bureau" au cas où l'utilisateur change de type en cours de route
+  if(type !== 'Réalisation bureau' && type !== 'Absence') {
+      let tmpDiv = document.createElement("DIV"); tmpDiv.innerHTML = contentVal;
+      contentVal = tmpDiv.textContent || tmpDiv.innerText;
+  }
+
   const baseData = {
-    type: type, 
-    content: type === 'Absence' ? document.getElementById('absenceVal').value : document.getElementById('taskContent').innerHTML,
-    location: document.getElementById('taskLocation').value, 
-    time: document.getElementById('taskTime').value,
-    prestations: document.getElementById('taskPrestations').value, 
-    url: urlValue, bg: selectedBg, textColor: selectedTextColor, position: existingTask ? existingTask.position : Date.now()
+    type: type, content: contentVal,
+    location: document.getElementById('taskLocation').value, time: document.getElementById('taskTime').value,
+    prestations: document.getElementById('taskPrestations').value, url: urlValue, bg: selectedBg, textColor: selectedTextColor, position: existingTask ? existingTask.position : Date.now()
   };
 
   let tasksToUpdateNotes = [];
@@ -1690,6 +1700,10 @@ function toggleType() {
     document.getElementById('groupUrl').style.display = isAbs ? 'none' : 'block'; 
     
     document.getElementById('groupRecurrence').style.display = (t === 'Intervention site' || t === 'Réunion') ? 'block' : 'none';
+
+    // Affichage de la barre d'outils Rich Text (uniquement pour bureau)
+    const rtToolbar = document.getElementById('richTextToolbar');
+    if (rtToolbar) rtToolbar.style.display = isBureau ? 'flex' : 'none';
 
     // Gestion de la case "Toute la journée"
     const wrapper = document.getElementById('fullDayWrapper');
