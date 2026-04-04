@@ -76,7 +76,6 @@
   .admin-toggle.selected { border-color: var(--orange); background: var(--orange-light); }
   .login-btn { width: 100%; padding: 15px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
 
-  /* Bloc mot de passe dynamique */
   .pwd-prompt { display: none; width: 100%; margin-top: 8px; }
   .profile-btn.selected .pwd-prompt { display: flex; flex-direction: column; gap: 5px; }
 
@@ -116,7 +115,7 @@
   .th-tri { display: block; font-family: 'Space Mono'; font-weight: bold; font-size: 14px; margin-bottom: 2px; }
   .th-name { display: block; font-size: 11px; font-weight: normal; opacity: 1; text-transform: none; font-family: 'DM Sans'; line-height: 1.1; }
 
-  .task-item { padding: 2px 18px 2px 6px; border-radius: 0; font-size: 11px; cursor: grab; line-height: 1.1; box-shadow: none; width: 100%; flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; border-left: 4px solid rgba(0,0,0,0.3); margin: 0; transition: opacity 0.3s; min-height: 24px; position: relative; overflow: hidden; }
+  .task-item { padding: 2px 18px 2px 6px; border-radius: 0; font-size: 11px; cursor: grab; line-height: 1.1; box-shadow: none; width: 100%; flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; border-left: 4px solid rgba(0,0,0,0.3); margin: 0; transition: opacity 0.3s, transform 0.3s, box-shadow 0.3s; min-height: 24px; position: relative; overflow: hidden; }
   .task-desc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
   .task-note-icon { position: absolute; top: 2px; right: 2px; font-size: 10px; cursor: help; background: rgba(255,255,255,0.8); border-radius: 50%; padding: 2px; line-height: 1; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 2; border: 1px solid rgba(0,0,0,0.1); }
   
@@ -308,7 +307,7 @@
                 <option value="reunion">🤝 RÉUNIONS</option>
                 <option value="abs">🏖️ ABSENCES SEULES</option>
             </select>
-            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche..." onkeyup="renderPlanning()">
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche..." onkeyup="handleSearch(event)">
         </div>
 
         <button class="new-btn" id="newCollabBtn" onclick="openCollabModal()" style="margin-left: 10px;">➕ EQUIPE</button>
@@ -511,7 +510,6 @@ let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], con
 
 const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
 
-// ECRAN D'ACCUEIL (Chargement de la liste publique)
 db.ref('planning/collabs').on('value', s => { 
     state.collabs = s.val() || DEFAULT_COLLABS; 
     if(!state.user && !state.isAdmin) init(); 
@@ -521,7 +519,6 @@ db.ref('planning/collabs').on('value', s => {
 let authDataLoaded = false;
 let currentYearListener = null;
 
-// DECLENCHE PAR LA CONNEXION : CHARGE LE RESTE DES DONNEES
 function startAuthenticatedData() {
     if(authDataLoaded) { doLogin(); return; }
     authDataLoaded = true;
@@ -636,6 +633,33 @@ function redoAction() { if(redoHistory.length > 0) { taskHistory.push(JSON.strin
 function showToast(msg) { const t = document.getElementById('toastMsg'); t.textContent = msg; t.style.opacity = '1'; setTimeout(() => { t.style.opacity = '0'; }, 2000); }
 function toggleDarkMode() { document.body.classList.toggle('dark-mode'); localStorage.setItem('hru_darkmode', document.body.classList.contains('dark-mode')); }
 if(localStorage.getItem('hru_darkmode') === 'true') document.body.classList.add('dark-mode');
+
+// GESTION RECHERCHE INTELLIGENTE
+function handleSearch(e) {
+    renderPlanning(); // On garde le filtrage en temps réel
+
+    if (e.key === 'Enter') {
+        const term = document.getElementById('searchInput').value.trim();
+        if (!term) return;
+
+        // Cherche le premier élément qui n'a pas la classe 'dimmed'
+        const matches = document.querySelectorAll('.cell-tasks-container > div:not(.dimmed)');
+        
+        if (matches.length > 0) {
+            const firstMatch = matches[0];
+            
+            // Fait défiler le conteneur jusqu'à l'élément
+            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+            
+            // Petit effet visuel (clignotement) pour bien le voir
+            const oldShadow = firstMatch.style.boxShadow;
+            firstMatch.style.boxShadow = '0 0 0 3px var(--accent), 0 0 15px var(--accent)';
+            setTimeout(() => { firstMatch.style.boxShadow = oldShadow; }, 2000);
+        } else {
+            showToast("Aucun résultat trouvé");
+        }
+    }
+}
 
 window.addEventListener('keydown', (e) => { 
     if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
@@ -1166,6 +1190,7 @@ function saveTask() {
 
   let contentVal = document.getElementById('taskContent').innerHTML;
   if(type === 'Absence') contentVal = document.getElementById('absenceVal').value;
+  
   if(type !== 'Réalisation bureau' && type !== 'Absence') {
       let tmpDiv = document.createElement("DIV"); tmpDiv.innerHTML = contentVal;
       contentVal = tmpDiv.textContent || tmpDiv.innerText;
@@ -1513,7 +1538,6 @@ function moveCollab(index, dir, e) { e.stopPropagation(); let list = getSortedCo
 function addNewYear() { const lastYear = Math.max(...state.years); const nextYear = lastYear + 1; if (confirm(`Ajouter l'année ${nextYear} ?`)) { state.years.push(nextYear); syncAdmin(); } }
 function removeCurrentYear() { if (state.currentYear === 2026) return alert("Interdit."); if (confirm(`Supprimer ${state.currentYear} ?`)) { state.years = state.years.filter(y => y !== state.currentYear); state.currentYear = 2026; syncAdmin(); } }
 function renderYearTabs() { const container = document.getElementById('yearTabs'); container.innerHTML = ""; state.years.sort().forEach(y => { const tab = document.createElement('div'); tab.className = `year-tab ${y === state.currentYear ? 'active' : ''}`; tab.textContent = `ANNEE ${y}`; tab.onclick = () => { state.currentYear = y; loadTasksForYear(y); renderYearTabs(); }; container.appendChild(tab); }); }
-function exportData() { const blob = new Blob([JSON.stringify({ tasks: state.tasks, collabs: state.collabs, years: state.years, trash: state.trash }, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `planning_global.json`; link.click(); }
 function openCollabModal() { document.getElementById('collabModal').classList.add('open'); }
 function saveCollab() { const pre = document.getElementById('newPre').value.trim(); const nom = document.getElementById('newNom').value.trim(); const tri = document.getElementById('newTri').value.trim().toUpperCase(); if(!pre || !tri) return alert("Données manquantes"); state.collabs.push({ code: tri, name: pre + " " + nom }); syncAdmin(); closeModal('collabModal'); }
 function openDeleteCollabModal() { const container = document.getElementById('collabDeleteList'); container.innerHTML = state.collabs.map(c => `<div class="collab-list-item"><span><b>${c.code}</b> — ${c.name}</span><button style="background:var(--red-light); color:var(--red); border:none; padding:5px; border-radius:4px; cursor:pointer;" onclick="deleteCollab('${c.code}')">✕</button></div>`).join(''); document.getElementById('deleteCollabModal').classList.add('open'); }
