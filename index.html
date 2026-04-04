@@ -1,37 +1,1542 @@
-{
-  "rules": {
-    "planning": {
-      // 1. Lecture publique UNIQUEMENT pour afficher l'écran de connexion
-      "collabs": {
-        ".read": true,
-        ".write": "auth != null && (auth.token.email == 'nicolas.renault@acceo.eu' || auth.token.email.matches(/.*admin@.*/))"
-      },
-      // 2. Admin uniquement pour la configuration du planning
-      "years": {
-        ".read": "auth != null",
-        ".write": "auth != null && (auth.token.email == 'nicolas.renault@acceo.eu' || auth.token.email.matches(/.*admin@.*/))"
-      },
-      "config": {
-        ".read": "auth != null",
-        ".write": "auth != null && (auth.token.email == 'nicolas.renault@acceo.eu' || auth.token.email.matches(/.*admin@.*/))"
-      },
-      // 3. Tâches, Notes, Corbeille, Historique : TOTALEMENT VERROUILLÉS sans mot de passe
-      "tasks": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      },
-      "notes": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      },
-      "trash": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      },
-      "history": {
-        ".read": "auth != null",
-        ".write": "auth != null"
-      }
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HRU — Planning Production LIVE</title>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.1/firebase-database-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f0f0ec; --surface: #ffffff; --surface2: #f7f7f4; --bg-alt: #f9f9f7;
+    --border: #e0e0d8; --text: #1a1a18; --text-muted: #7a7a72;
+    --accent: #2d5a8e; --accent-light: #e8eef5; --orange: #c47a1a;
+    --orange-light: #fdf3e3; --red: #c0392b; --red-vif-livrable: #ff0000;
+    --red-vif-ao: #ff0000; --red-light: #fceae8; --green-hru: #2e7d5e;
+    --grey-columns: #f2f2f2; --grey-absence: #d1d1d1; --yellow-livrable: #ffeb3b;
+    --shadow-lg: 0 8px 32px rgba(0,0,0,0.12); --radius-sm: 6px;
+  }
+
+  body.dark-mode {
+    --bg: #121212; --surface: #1e1e1e; --surface2: #2d2d2d; --bg-alt: #1a1a1a;
+    --border: #333333; --text: #e0e0e0; --text-muted: #999999;
+    --grey-columns: #252525; --grey-absence: #3a3a3a;
+  }
+  body.dark-mode .planning-table { background: var(--surface); }
+  body.dark-mode .task-item.type-bureau { background: #2d2d2d !important; color: #e0e0e0 !important; }
+  body.dark-mode .row-weekend td:not(.col-date):not(.col-period) { background-color: #1a1a1a !important; }
+  body.dark-mode .planning-toolbar { background: var(--surface); }
+  body.dark-mode .modal { background: var(--surface); color: var(--text); }
+  body.dark-mode .form-input { background: var(--bg); color: var(--text); border-color: var(--border); }
+  body.dark-mode .cell-absence { color: #aaaaaa; }
+  body.dark-mode .locked-cell { background-color: #161616 !important; }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); font-size: 13px; height: 100vh; overflow: hidden; transition: background 0.3s, color 0.3s; }
+
+  .row-today .col-date { background-color: var(--red) !important; color: white !important; }
+  .row-day-end td { border-bottom: 1.5px solid var(--text) !important; }
+  .col-date-end { border-bottom: 1.5px solid var(--text) !important; }
+  .row-weekend td:not(.col-date):not(.col-period) { background-color: #e6e6e6 !important; }
+  
+  .locked-cell { background-color: #f9f9f9 !important; opacity: 0.85; }
+
+  .is-fav { background: #fffdf0; border-left: 4px solid var(--orange) !important; }
+  .fav-star { color: var(--orange); margin-left: 8px; font-weight: bold; }
+
+  body.zoom-out .planning-table { width: 100vw; table-layout: fixed; font-size: 10px; }
+  body.zoom-out .planning-table th:not(.col-date-header):not(.col-period-header) { width: auto !important; padding: 4px 2px; }
+  body.zoom-out .planning-table td:not(.col-date):not(.col-period) { width: auto !important; height: 22px; min-height: 22px; }
+  body.zoom-out .task-item { padding: 1px 3px; font-size: 9px; border-left-width: 2px; }
+  body.zoom-out .task-location, body.zoom-out .task-time-inline, body.zoom-out .task-url-btn { display: none; }
+  body.zoom-out .th-name { display: none; }
+  body.zoom-out .th-tri { font-size: 11px; margin-bottom: 0; }
+  body.zoom-out .week-row-head { height: 22px !important; font-size: 9px; line-height: 22px; }
+
+  .zoom-container { display: flex; align-items: center; gap: 10px; background: var(--surface2); padding: 5px 15px; border-radius: 20px; border: 1px solid var(--border); margin-left: 10px; }
+  .zoom-slider { cursor: pointer; width: 80px; accent-color: var(--accent); }
+  .zoom-label { font-size: 10px; font-weight: 800; color: var(--accent); font-family: 'Space Mono'; }
+
+  .search-container { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+  .search-input { padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border); font-family: 'DM Sans'; font-size: 12px; outline: none; background: var(--surface2); color: var(--text); width: 200px; transition: 0.2s; }
+  .search-input:focus { border-color: var(--accent); width: 250px; }
+  .date-picker { width: 130px; cursor: pointer; }
+  .date-picker:focus { width: 140px; }
+  .filter-select { padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); font-family: 'DM Sans'; font-size: 11px; font-weight: bold; outline: none; background: var(--surface2); color: var(--text); cursor: pointer;}
+
+  #loginScreen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #1a2f4a; z-index: 1000; overflow-y: auto; padding: 20px; }
+  .login-box { background: white; border-radius: 16px; padding: 40px; width: 900px; max-width: 100%; box-shadow: 0 24px 64px rgba(0,0,0,0.3); }
+  .login-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; max-height: 400px; overflow-y: auto; margin: 25px 0; padding-right: 10px; }
+  .profile-btn { padding: 12px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 8px; transition: 0.2s; text-align: center; }
+  .profile-btn.selected { border-color: var(--accent); background: var(--accent-light); color: #1a1a18; }
+  .profile-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--accent); color: white; display: flex; align-items: center; justify-content: center; font-family: 'Space Mono'; font-size: 10px; font-weight: bold; }
+  .admin-toggle { display: flex; align-items: center; gap: 10px; padding: 15px; border: 2px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; margin-bottom: 20px; color: #1a1a18; }
+  .admin-toggle.selected { border-color: var(--orange); background: var(--orange-light); }
+  .login-btn { width: 100%; padding: 15px; background: var(--accent); color: white; border: none; border-radius: 6px; font-weight: 600; cursor: pointer; }
+
+  /* Bloc mot de passe dynamique */
+  .pwd-prompt { display: none; width: 100%; margin-top: 8px; }
+  .profile-btn.selected .pwd-prompt { display: flex; flex-direction: column; gap: 5px; }
+
+  #app { display: none; flex-direction: column; height: 100vh; }
+  #app.visible { display: flex; }
+  
+  .topbar { background: var(--accent); color: white; padding: 0 20px; height: 50px; display: flex; align-items: center; gap: 20px; flex-shrink: 0; }
+  .topbar-title { font-weight: bold; font-family: 'Space Mono'; flex-shrink: 0; }
+  .topbar-controls { display: flex; gap: 10px; margin-left: auto; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+  
+  .year-tabs-container { display: flex; align-items: flex-end; height: 100%; gap: 5px; }
+  .year-tabs { display: flex; gap: 5px; align-items: flex-end; height: 100%; }
+  .year-tab { padding: 8px 15px; background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); border-bottom: none; border-radius: 6px 6px 0 0; color: rgba(255,255,255,0.6); cursor: pointer; font-family: 'Space Mono'; font-size: 11px; font-weight: bold; transition: 0.2s; }
+  .year-tab.active { background: var(--bg); color: var(--accent); border-color: var(--bg); padding-top: 10px; }
+  .add-year-btn, .remove-year-btn { display: none; border: none; color: white; width: 26px; height: 26px; border-radius: 50%; cursor: pointer; font-weight: bold; font-size: 16px; margin-bottom: 5px; display: flex; align-items: center; justify-content: center; }
+  .add-year-btn { background: rgba(255,255,255,0.2); }
+  .remove-year-btn { background: rgba(255,255,255,0.2); }
+
+  .planning-toolbar { background: var(--surface); padding: 10px 20px; border-bottom: 1px solid var(--border); display: block; flex-shrink: 0; position: relative; }
+  .toolbar-items { display: flex; align-items: center; gap: 10px; width: 100%; }
+  .mobile-toolbar-toggle { display: none; width: 100%; text-align: center; padding: 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; font-weight: bold; cursor: pointer; color: var(--accent); font-size: 12px; }
+
+  .planning-scroll { flex: 1; overflow-y: auto; overflow-x: auto; position: relative; scroll-behavior: smooth; }
+  .planning-table { width: max-content; border-collapse: collapse; background: var(--surface); table-layout: fixed; }
+  .planning-table thead th { position: sticky; top: 0; background: var(--accent) !important; color: white !important; padding: 10px 5px; border: 1px solid rgba(255,255,255,0.2); font-size: 11px; z-index: 150; text-align: center; width: 180px; }
+  .col-date-header { width: 85px !important; left: 0; z-index: 210 !important; }
+  .col-period-header { width: 70px !important; left: 85px; z-index: 210 !important; }
+  .planning-table td { border: 1px solid var(--border); padding: 0; vertical-align: top; height: 30px; min-height: 30px; overflow: visible; cursor: pointer; }
+  
+  .cell-tasks-container { display: flex; flex-direction: column; min-height: 100%; width: 100%; align-items: stretch; }
+  .cell-absence { background-color: var(--grey-absence) !important; display: flex !important; align-items: center; justify-content: center; font-weight: 800; color: #555; text-transform: uppercase; font-size: 11px; flex: 1; width: 100%; transition: opacity 0.3s; margin: 0; min-height: 24px; border-left: 4px solid #555; position: relative; overflow: hidden; padding-right: 18px; }
+
+  .week-row-head { background: #444 !important; color: white !important; font-size: 10px; font-weight: bold; padding: 0 15px !important; height: 30px !important; border-bottom: 1px solid #222; text-align: left !important; font-family: 'Space Mono'; vertical-align: middle !important; position: sticky; left: 0; z-index: 140; }
+  .col-date { width: 85px !important; font-weight: bold; background: var(--grey-columns) !important; position: sticky; left: 0; z-index: 120 !important; text-transform: capitalize; border-right: 2px solid var(--border) !important; text-align: center; vertical-align: middle !important; font-size: 11px; }
+  .col-period { width: 70px !important; text-align: center; font-family: 'Space Mono'; font-size: 8px; color: var(--text-muted); font-weight: bold; text-transform: uppercase; background: var(--grey-columns) !important; position: sticky; left: 85px; z-index: 120 !important; border-right: 2px solid var(--border) !important; vertical-align: middle !important; }
+
+  .th-tri { display: block; font-family: 'Space Mono'; font-weight: bold; font-size: 14px; margin-bottom: 2px; }
+  .th-name { display: block; font-size: 11px; font-weight: normal; opacity: 1; text-transform: none; font-family: 'DM Sans'; line-height: 1.1; }
+
+  .task-item { padding: 2px 18px 2px 6px; border-radius: 0; font-size: 11px; cursor: grab; line-height: 1.1; box-shadow: none; width: 100%; flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; border-left: 4px solid rgba(0,0,0,0.3); margin: 0; transition: opacity 0.3s; min-height: 24px; position: relative; overflow: hidden; }
+  .task-desc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+  .task-note-icon { position: absolute; top: 2px; right: 2px; font-size: 10px; cursor: help; background: rgba(255,255,255,0.8); border-radius: 50%; padding: 2px; line-height: 1; box-shadow: 0 1px 3px rgba(0,0,0,0.2); z-index: 2; border: 1px solid rgba(0,0,0,0.1); }
+  
+  .task-item.dimmed, .cell-absence.dimmed { opacity: 0.1 !important; }
+  .task-location { font-size: 9px; opacity: 0.8; font-weight: normal; margin-top: 2px; font-style: italic; }
+  .task-time-inline { font-size: 9px; font-weight: bold; margin-top: 2px; opacity: 0.9; }
+
+  /* INFO-BULLE SUR MESURE */
+  #customTooltip { position: fixed; z-index: 9999; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow-lg); padding: 12px; border-radius: 8px; font-size: 11px; max-width: 280px; pointer-events: none; display: none; line-height: 1.4; transition: opacity 0.1s; }
+  body.dark-mode #customTooltip { background: var(--surface2); border-color: var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+
+  .type-intervention { font-weight: 800 !important; }
+  .type-reunion { font-weight: 800 !important; background: var(--yellow-livrable) !important; color: #000000 !important; border-left-color: #000000 !important; }
+  .type-bureau { font-weight: 400; background: #ffffff !important; border: 1px solid; border-left: 4px solid; color: var(--text) !important; }
+  .type-livrable { background: var(--yellow-livrable) !important; color: var(--red-vif-livrable) !important; font-weight: 800; border-left-color: var(--red-vif-livrable) !important; }
+  .type-ao { background: var(--red-vif-ao) !important; color: #ffffff !important; font-weight: 800 !important; border: 1.5px solid #000000 !important; border-left: none !important; position: relative; padding-left: 10px; z-index: 10; }
+  
+  .today-btn, .fav-btn, .new-btn, .del-btn, .trash-btn, .copy-btn, .save-btn, .cancel-btn, .stats-btn { cursor: pointer !important; }
+  .today-btn { padding: 8px 18px; background: var(--red); color: white; border: none; border-radius: 4px; font-weight: bold; }
+  .fav-btn { padding: 8px 18px; background: var(--orange); color: white; border: none; border-radius: 4px; font-weight: bold; }
+  .stats-btn { padding: 8px 18px; background: #607d8b; color: white; border: none; border-radius: 4px; font-weight: bold; display: none; }
+  .new-btn { padding: 8px 18px; background: var(--green-hru); color: white; border: none; border-radius: 4px; font-weight: bold; display: none; }
+  .del-btn { padding: 8px 18px; background: #444; color: white; border: none; border-radius: 4px; font-weight: bold; display: none; }
+  .trash-btn { padding: 8px 18px; background: #546e7a; color: white; border: none; border-radius: 4px; font-weight: bold; display: none; }
+  
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: center; justify-content: center; z-index: 2000; }
+  .modal-overlay.open { display: flex; }
+  
+  .modal { background: var(--surface); padding: 20px; border-radius: 12px; width: 550px; box-shadow: var(--shadow-lg); position: relative; max-height: 95vh; overflow-y: auto;}
+  .form-group { margin-bottom: 10px; }
+  .form-label { font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--text-muted); display: block; margin-bottom: 4px; }
+  .form-input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 12px; }
+  .btn-group { display: flex; justify-content: space-between; gap: 8px; margin-top: 15px; }
+
+  /* TOOLBAR RICH TEXT */
+  .rt-btn { width:22px; height:22px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:4px; background:var(--surface2); cursor:pointer; font-family:serif; font-size:12px; color:var(--text); transition:0.2s; }
+  .rt-btn:hover { background:var(--border); }
+  .rt-color { width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,0.2); cursor:pointer; display:inline-block; transition:transform 0.1s;}
+  .rt-color:hover { transform:scale(1.2); }
+
+  .collab-flex { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 10px; }
+  .collab-block { flex: 1; }
+  .add-binome-btn { background: var(--accent-light); color: var(--accent); border: 1px dashed var(--accent); padding: 6px; border-radius: 4px; font-weight: bold; font-size: 10px; width: 100%; cursor: pointer; }
+
+  .collab-list-item, .trash-list-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 15px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .move-btn, .restore-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); border-radius: 4px; width: 28px; height: 26px; cursor: pointer; }
+  .restore-btn { width: auto !important; padding: 0 10px; font-size: 10px; font-weight: bold; color: var(--green-hru); border: 1px solid var(--green-hru); background: var(--surface); height: 30px; }
+
+  .view-item { margin-bottom: 15px; }
+  .view-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
+  .view-value { font-size: 14px; color: var(--text); padding: 8px; background: var(--surface2); border-radius: 4px; border-left: 4px solid var(--accent); white-space: pre-wrap; word-break: break-word; }
+
+  .color-picker { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+  .palette-light, .palette-vivid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; width: 100%; }
+  .color-option { width: 100%; aspect-ratio: 1 / 1; max-width: 28px; margin: 0 auto; border-radius: 50%; border: 2px solid transparent; cursor: pointer; transition: transform 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+  .color-option.selected { border-color: #1a1a18; transform: scale(1.1); box-shadow: 0 0 0 1px white inset; }
+
+  .stats-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+  .stats-table th, .stats-table td { border: 1px solid var(--border); padding: 8px; text-align: center; }
+  .stats-table th { background: var(--surface2); font-weight: bold; }
+  
+  #toastMsg { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1a1a18; color: white; padding: 10px 25px; border-radius: 30px; font-weight: bold; font-family: 'Space Mono'; font-size: 11px; z-index: 9999; opacity: 0; pointer-events: none; transition: 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+
+  @media (max-width: 768px) {
+    .topbar { flex-direction: column; padding: 12px 10px 0 10px; height: auto; gap: 10px; }
+    .topbar-title { width: 100%; text-align: center; font-size: 14px; margin-bottom: 0; order: 1; }
+    .topbar-controls { width: 100%; margin-left: 0; justify-content: center; order: 2; padding-bottom: 5px; }
+    .year-tabs-container { width: 100%; justify-content: center; order: 3; height: auto; }
+    
+    .planning-toolbar { padding: 10px; }
+    .mobile-toolbar-toggle { display: flex; justify-content: center; align-items: center; gap: 8px; }
+    .toolbar-items { display: none; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 10px; }
+    .toolbar-items.open { display: flex; }
+    .toolbar-items > * { flex: 1 1 auto; margin: 0; text-align: center; font-size: 10px; padding: 8px; }
+    
+    .search-container { width: 100%; flex-wrap: wrap; gap: 5px; margin-left: 0 !important; }
+    .search-input { width: 100%; }
+    .filter-select { width: 100%; }
+    .modal { width: 95%; max-width: none; padding: 15px; }
+    .login-grid { grid-template-columns: repeat(3, 1fr); }
+    .login-box { padding: 20px; }
+    .collab-flex { flex-direction: column; align-items: stretch; gap: 10px; }
+    .collab-block { width: 100%; }
+    .btn-group { flex-direction: column; gap: 8px; }
+    .btn-group button { width: 100%; padding: 12px; margin: 0; }
+    .stats-table th, .stats-table td { padding: 4px; font-size: 10px; }
+    .zoom-container { display: none !important; }
+  }
+  @media (max-width: 480px) {
+    .login-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  @media print {
+    body { background: white !important; font-size: 10px; }
+    .topbar, .planning-toolbar, .zoom-container, #loginScreen, .modal-overlay, #toastMsg, #customTooltip { display: none !important; }
+    #app { display: block !important; height: auto !important; }
+    .planning-scroll { overflow: visible !important; height: auto !important; }
+    .planning-table { width: 100% !important; page-break-inside: auto; border: 1px solid #000; }
+    .planning-table th { background-color: var(--accent) !important; color: white !important; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    * { -webkit-print-color-adjust: exact !important; color-adjust: exact !important; print-color-adjust: exact !important; }
+  }
+</style>
+</head>
+<body>
+
+<div id="toastMsg">Action effectuée</div>
+<div id="customTooltip"></div>
+
+<div id="loginScreen">
+  <div class="login-box">
+    <h2 class="login-logo" style="color: var(--text)">⬡ PLANNING PRODUCTION HRU</h2>
+    
+    <div class="login-grid" id="profileGrid"></div>
+    <div id="collabAuthError" style="color: var(--red); font-size: 11px; margin-top: 8px; text-align:center; display: none; font-weight:bold;">Identifiants incorrects</div>
+    
+    <div class="admin-toggle" id="adminToggle" onclick="handleAdminToggle()">
+      <span>🔧</span>
+      <div><div style="font-weight:600">Administration</div><div style="font-size:10px; color:gray">Gestion de la structure</div></div>
+    </div>
+
+    <div id="adminAuthBlock" style="display:none; margin-bottom: 20px; padding: 15px; background: var(--surface2); border-radius: 8px; border: 1px solid var(--border);">
+        <div style="display:flex; gap:10px; margin-bottom:10px; flex-wrap:wrap;">
+            <div style="flex:1; min-width:150px;"><label class="form-label">Email de l'administrateur</label><input type="email" id="adminEmail" class="form-input"></div>
+            <div style="flex:1; min-width:150px;"><label class="form-label">Mot de passe</label><input type="password" id="adminPwd" class="form-input" onkeyup="if(event.key==='Enter') loginFirebaseAdmin()"></div>
+        </div>
+        <button onclick="loginFirebaseAdmin()" class="login-btn" style="padding: 10px; font-size: 12px; background:var(--orange);">Valider l'accès Admin</button>
+        <div id="adminAuthError" style="color: var(--red); font-size: 11px; margin-top: 8px; display: none; font-weight:bold;">Erreur</div>
+    </div>
+  </div>
+</div>
+
+<div id="app">
+  <div class="topbar">
+    <div class="topbar-title">⬡ PLANNING PRODUCTION HRU</div>
+    
+    <div class="year-tabs-container">
+        <div class="year-tabs" id="yearTabs"></div>
+        <button id="addYearBtn" class="add-year-btn" onclick="addNewYear()" title="Ajouter l'année suivante">+</button>
+        <button id="removeYearBtn" class="remove-year-btn" onclick="removeCurrentYear()" title="Supprimer l'année en cours">-</button>
+    </div>
+    
+    <div class="topbar-controls">
+        <button onclick="toggleDarkMode()" style="background:none; border:none; font-size:16px; cursor:pointer;" title="Mode Sombre">🌙</button>
+        <div id="userInfo" style="font-size:11px; opacity:0.8;"></div>
+        <button onclick="window.print()" style="padding:6px 12px; cursor:pointer; background:#ffffff; border:none; border-radius:4px; font-size:10px; font-weight:bold; color:#1a1a18;">🖨️ PDF</button>
+        <button id="exportBtn" onclick="openExportModal()" style="padding:6px 12px; cursor:pointer; background:rgba(255,255,255,0.2); border:1px solid white; border-radius:4px; font-size:10px; font-weight:bold; color:white; display:none;">📅 EXPORT AGENDA</button>
+        <button onclick="logoutApp()" style="padding:4px 10px; cursor:pointer; background:rgba(255,255,255,0.2); border:none; color:white; border-radius:4px;" title="Se déconnecter">✖</button>
+    </div>
+  </div>
+
+  <div class="planning-toolbar">
+    <div id="clipboardBar" style="display:none; position:absolute; inset:0; background:var(--accent); color:white; align-items:center; justify-content:center; gap:15px; z-index:1000;">
+        <span>📋 Tâche copiée ! Cliquez sur une case pour coller.</span>
+        <button onclick="cancelPasteMode()" style="background:rgba(255,255,255,0.2); border:1px solid white; color:white; padding:4px 10px; border-radius:4px; cursor:pointer;">Annuler</button>
+    </div>
+    
+    <div class="mobile-toolbar-toggle" onclick="toggleMobileToolbar()">
+        <span>🛠️ Outils & Filtres</span> <span id="toolbarArrow">▼</span>
+    </div>
+
+    <div class="toolbar-items" id="toolbarItems">
+        <button class="today-btn" onclick="scrollToToday()">🎯 AUJOURD'HUI</button>
+        
+        <div class="search-container" style="margin-left: 0;">
+            <input type="date" id="jumpDate" class="search-input date-picker" onchange="jumpToDate(this.value)" title="Sauter à une date">
+        </div>
+
+        <div id="zoomControls" class="zoom-container">
+            <span class="zoom-label">NORMAL</span>
+            <input type="range" class="zoom-slider" min="0" max="1" step="1" value="0" oninput="handleZoom(this.value)">
+            <span class="zoom-label">GLOBAL</span>
+        </div>
+        
+        <button class="stats-btn" id="lockBtn" onclick="toggleLockPast()" style="display:none; background:var(--orange);">🔓 DÉVERROUILLÉ</button>
+        
+        <button class="fav-btn" onclick="openFavModal()">⭐ FAVORIS</button>
+        <button class="stats-btn" id="accessBtn" onclick="openAccessModal()" style="display:none; background:var(--green-hru);">🔐 ACCÈS</button>
+        <button class="stats-btn" id="historyBtn" onclick="openHistoryModal()" style="display:none; background:#8e44ad;">📜 HISTO</button>
+        <button class="stats-btn" id="statsBtn" onclick="openStatsModal()">📊 STATS</button>
+        
+        <div class="search-container">
+            <select id="viewFilter" onchange="renderPlanning()" class="filter-select" style="display:none;">
+                <option value="all">👀 TOUT VOIR</option>
+                <option value="prod">⚙️ PROD. SEULE (SANS ABS.)</option>
+                <option value="site">🚗 INTERVENTIONS SITE</option>
+                <option value="bureau">💻 RÉALISATION BUREAU</option>
+                <option value="livrables">📦 LIVRABLES & AO</option>
+                <option value="reunion">🤝 RÉUNIONS</option>
+                <option value="abs">🏖️ ABSENCES SEULES</option>
+            </select>
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche..." onkeyup="renderPlanning()">
+        </div>
+
+        <button class="new-btn" id="newCollabBtn" onclick="openCollabModal()" style="margin-left: 10px;">➕ EQUIPE</button>
+        <button class="del-btn" id="delCollabBtn" onclick="openDeleteCollabModal()">❌ SUPP.</button>
+        <button class="trash-btn" id="trashBtn" onclick="openTrashModal()">🗑️ CORBEILLE</button>
+    </div>
+  </div>
+
+  <div class="planning-scroll" id="scrollContainer">
+    <table class="planning-table">
+      <thead id="planningHead"></thead>
+      <tbody id="planningBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <h3>Exporter vers mon Agenda</h3>
+    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Sélectionnez une date. La semaine complète correspondante sera téléchargée au format .ics (compatible Google Agenda, Outlook, Apple).</p>
+    
+    <div class="form-group" id="exportCollabGroup" style="display:none;">
+        <label class="form-label">Agenda du collaborateur :</label>
+        <select id="exportCollab" class="form-input"></select>
+    </div>
+
+    <div class="form-group">
+        <label class="form-label">Date (pour identifier la semaine) :</label>
+        <input type="date" id="exportDate" class="form-input">
+    </div>
+    
+    <div class="btn-group">
+        <button onclick="closeModal('exportModal')" style="border:none; background:none; color:var(--text); cursor:pointer; width:auto; padding:8px 15px;">Annuler</button>
+        <button onclick="downloadICS()" style="background:var(--accent); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer;">Télécharger .ics</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="historyModal">
+  <div class="modal" style="width:600px;">
+    <h3>Historique d'activité (100 dernières actions)</h3>
+    <div id="historyList" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; font-size:11px; padding:10px; line-height:1.5;"></div>
+    <div class="btn-group">
+        <button onclick="closeModal('historyModal')" style="width:100%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="accessModal">
+  <div class="modal">
+    <h3>Gérer les droits d'édition</h3>
+    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Cochez les collaborateurs autorisés à modifier le planning.</p>
+    <div id="accessList" style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; padding: 10px;"></div>
+    <div class="btn-group">
+        <button onclick="closeModal('accessModal')" style="border:none; background:none; color:var(--text); cursor:pointer;">Annuler</button>
+        <button onclick="saveAccess()" style="background:var(--accent); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer;">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="favModal"><div class="modal"><h3>Ma colonne & Ordre</h3><div id="collabFavList" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; margin-top:10px"></div><div class="btn-group"><button onclick="resetFav()" style="margin-right:auto; border:none; background:none; color:var(--red); cursor:pointer;">Réinitialiser Favori</button><button onclick="closeModal('favModal')" style="border:none; background:none; cursor:pointer; padding:8px 15px; color:var(--text)">Fermer</button></div></div></div>
+<div class="modal-overlay" id="collabModal"><div class="modal"><h3>Ajouter collaborateur</h3><div style="margin-top:20px"><label class="form-label">Prénom</label><input type="text" id="newPre" class="form-input"></div><div style="margin-bottom:10px"><label class="form-label">Nom</label><input type="text" id="newNom" class="form-input"></div><div style="margin-bottom:10px"><label class="form-label">Trigramme</label><input type="text" id="newTri" class="form-input" maxlength="3" style="text-transform:uppercase"></div><div class="btn-group"><button onclick="closeModal('collabModal')" style="border:none; background:none; color:var(--text); cursor:pointer;">Annuler</button><button onclick="saveCollab()" style="background:var(--green-hru); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer;">Créer</button></div></div></div>
+<div class="modal-overlay" id="deleteCollabModal"><div class="modal"><h3>Gérer l'équipe</h3><div id="collabDeleteList" style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; margin-top:15px"></div><div class="btn-group"><button onclick="closeModal('deleteCollabModal')" style="border:none; background:none; color:var(--text); cursor:pointer;">Fermer</button></div></div></div>
+
+<div class="modal-overlay" id="trashModal">
+  <div class="modal">
+    <h3 style="margin-bottom:10px;">Corbeille (48h)</h3>
+    <div id="trashList" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:4px;"></div>
+    <div class="btn-group">
+        <button onclick="emptyTrash()" style="width:48%; background:#fceae8; color:var(--red); border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700;">VIDER</button>
+        <button onclick="closeModal('trashModal')" style="width:48%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="viewModal">
+  <div class="modal">
+    <h3 style="margin-bottom:15px;">Détails de la tâche</h3>
+    <div id="viewContentArea"></div>
+    
+    <div id="consultNoteContainer" style="margin-top: 15px; border-top: 1px solid var(--border); padding-top: 10px;">
+        <label class="form-label">📝 NOTE DE RETOUR (COMPTE RENDU)</label>
+        <textarea id="consultNoteArea" class="form-input" rows="3" placeholder="Ajouter un compte rendu de l'intervention ou une information..."></textarea>
+        <input type="hidden" id="consultNoteTaskId">
+    </div>
+
+    <div class="btn-group">
+        <button onclick="closeModal('viewModal')" style="width:48%; border:none; border-radius:6px; cursor:pointer; font-weight:700; padding:10px; background:var(--surface2); color:var(--text);">FERMER</button>
+        <button onclick="saveNote()" style="width:48%; border:none; border-radius:6px; cursor:pointer; font-weight:700; padding:10px; background:var(--green-hru); color:white;">💾 SAUVER NOTE</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="statsModal">
+  <div class="modal" style="width: 700px;">
+    <h3 style="margin-bottom: 5px;">Statistiques du planning</h3>
+    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Calcul basé sur toutes les données enregistrées.</p>
+    <div style="max-height: 400px; overflow-y: auto;">
+        <table class="stats-table" id="statsTable">
+            <thead><tr><th>Collaborateur</th><th>Interventions Site</th><th>Réalisation Bureau</th><th>Absences (Jours)</th></tr></thead>
+            <tbody id="statsBody"></tbody>
+        </table>
+    </div>
+    <div class="btn-group"><button onclick="closeModal('statsModal')" style="width:100%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="taskModal">
+  <div class="modal">
+    <div style="display:flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+        <h3 id="modalTitle" style="margin:0;">Gérer la tâche</h3>
+        <button id="btnNewTaskInside" onclick="prepareForNewTask()" style="background:var(--green-hru); color:white; border:none; padding:4px 10px; border-radius:4px; font-weight:bold; font-size:10px; cursor:pointer;">+ AJOUT NOUV. TÂCHE</button>
+    </div>
+    <input type="hidden" id="editTaskId">
+    <input type="hidden" id="taskGroupId">
+    
+    <div class="collab-flex">
+        <div class="collab-block"><label class="form-label">Principal</label><input type="text" id="taskCollab" class="form-input" disabled></div>
+        <div class="collab-block" id="binomeSection"><label class="form-label">Binôme</label><div id="binomeDisplay"><button id="addBinomeBtn" class="add-binome-btn" onclick="showBinomeSelect()">➕ AJOUT BINÔME</button><select id="taskBinome" class="form-input" style="display:none" onchange="handleBinomeChange()"></select></div></div>
+    </div>
+    
+    <div class="form-group"><label class="form-label">Type</label><select id="taskType" class="form-input" onchange="toggleType()"><option value="Intervention site">Intervention site</option><option value="Réalisation bureau">Réalisation bureau</option><option value="Réunion">Réunion</option><option value="Envoi livrables">Envoi livrables</option><option value="Envoi AO">Envoi AO</option><option value="Absence">Absence</option></select></div>
+    
+    <div class="form-group" id="groupColors"><label class="form-label">Couleur</label><div class="color-picker"><div class="palette-light"><div class="color-option" style="background:#E8EEF5" data-bg="#E8EEF5" data-text="#1A4373" onclick="selectColor(this)"></div><div class="color-option" style="background:#E6F3EE" data-bg="#E6F3EE" data-text="#1B5E44" onclick="selectColor(this)"></div><div class="color-option" style="background:#FDF3E3" data-bg="#FDF3E3" data-text="#8E5611" onclick="selectColor(this)"></div><div class="color-option" style="background:#FCEAE8" data-bg="#FCEAE8" data-text="#96281B" onclick="selectColor(this)"></div><div class="color-option" style="background:#F0EAF8" data-bg="#F0EAF8" data-text="#4D347A" onclick="selectColor(this)"></div><div class="color-option" style="background:#E0F7FA" data-bg="#E0F7FA" data-text="#006064" onclick="selectColor(this)"></div><div class="color-option" style="background:#D7CCC8" data-bg="#D7CCC8" data-text="#4E342E" onclick="selectColor(this)"></div></div><div class="palette-vivid"><div class="color-option" style="background:#1A4373" data-bg="#1A4373" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#2E7D5E" data-bg="#2E7D5E" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#C47A1A" data-bg="#C47A1A" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#C0392B" data-bg="#C0392B" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#6A1B9A" data-bg="#6A1B9A" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#00838F" data-bg="#00838F" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#37474F" data-bg="#37474F" data-text="#FFFFFF" onclick="selectColor(this)"></div></div></div></div>
+    
+    <div class="form-group" id="groupContent">
+        <label class="form-label" style="margin-bottom:4px;">Description</label>
+        <div id="taskContent" class="form-input" contenteditable="true" onkeydown="handleContentEditableKeys(event)" onpaste="handlePaste(event)" style="min-height: 60px; max-height: 150px; overflow-y: auto; background: var(--surface);"></div>
+        
+        <div id="richTextToolbar" style="display:none; gap:5px; align-items:center; margin-top:6px; justify-content:flex-end;">
+            <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('bold')" title="Gras (Ctrl+B)"><b>B</b></button>
+            <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('italic')" title="Italique (Ctrl+I)"><i>I</i></button>
+            <button type="button" class="rt-btn" onmousedown="event.preventDefault(); formatText('underline')" title="Souligné (Ctrl+U)"><u>U</u></button>
+            <div style="width:1px; height:12px; background:var(--border); margin:0 2px;"></div>
+            <span class="rt-color" style="background:#ff0000" onmousedown="event.preventDefault(); formatText('foreColor', '#ff0000')" title="Rouge"></span>
+            <span class="rt-color" style="background:#ff9900" onmousedown="event.preventDefault(); formatText('foreColor', '#ff9900')" title="Orange"></span>
+            <span class="rt-color" style="background:#ffcc00" onmousedown="event.preventDefault(); formatText('foreColor', '#ffcc00')" title="Jaune"></span>
+            <span class="rt-color" style="background:#00cc00" onmousedown="event.preventDefault(); formatText('foreColor', '#00cc00')" title="Vert"></span>
+            <span class="rt-color" style="background:#00cccc" onmousedown="event.preventDefault(); formatText('foreColor', '#00cccc')" title="Cyan"></span>
+            <span class="rt-color" style="background:#0066ff" onmousedown="event.preventDefault(); formatText('foreColor', '#0066ff')" title="Bleu"></span>
+            <span class="rt-color" style="background:#9900ff" onmousedown="event.preventDefault(); formatText('foreColor', '#9900ff')" title="Violet"></span>
+            <span class="rt-color" style="background:#ff00ff" onmousedown="event.preventDefault(); formatText('foreColor', '#ff00ff')" title="Magenta"></span>
+            <div style="width:1px; height:12px; background:var(--border); margin:0 2px;"></div>
+            <button type="button" class="rt-btn" onmousedown="event.preventDefault(); document.execCommand('removeFormat', false, null)" title="Effacer la mise en forme" style="font-size:10px;">🧽</button>
+        </div>
+    </div>
+    
+    <div class="collab-flex" id="timeRow">
+        <div class="collab-block" id="groupTime" style="display:none"><label class="form-label">Horaire précis</label><input type="text" id="taskTime" class="form-input" placeholder="ex: 09h00"></div>
+        <div class="collab-block" id="groupRecurrence" style="display:none"><label class="form-label">Répéter (semaines)</label><input type="number" id="taskRecurrence" class="form-input" min="1" max="52" value="1" title="Si 1, la tâche n'est créée qu'une fois."></div>
+    </div>
+    
+    <div id="fullDayWrapper" style="display:none;">
+        <label id="fullDayLabel" style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:bold; font-size:11px; color:var(--accent);">
+            <input type="checkbox" id="taskFullDay" style="width:16px; height:16px; accent-color:var(--accent);"> TOUTE LA JOURNÉE
+        </label>
+    </div>
+
+    <div class="form-group" id="groupLocation" style="display:none"><label class="form-label">Lieu / Adresse</label><input type="text" id="taskLocation" class="form-input"></div>
+    <div class="form-group" id="groupPrestations" style="display:none"><label class="form-label">Détail des prestations</label><textarea id="taskPrestations" class="form-input" rows="2"></textarea></div>
+    <div class="form-group" id="groupAbsence" style="display:none"><label class="form-label">Type d'absence</label><select id="absenceVal" class="form-input" onchange="toggleType()"><option value="CP">CP</option><option value="FÉRIÉ">FÉRIÉ</option><option value="FORMATION">FORMATION</option></select></div>
+    
+    <div class="form-group" id="groupUrl"><label class="form-label">Chemin du dossier serveur</label><input type="text" id="taskUrl" class="form-input" placeholder="ex: Z:\Dossiers\HRU\..."></div>
+
+    <div class="form-group" id="groupAdminNote" style="border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10px;">
+        <label class="form-label">📝 NOTE DE RETOUR (Compte rendu)</label>
+        <textarea id="taskAdminNote" class="form-input" rows="2" placeholder="Ajouter ou modifier une note..."></textarea>
+    </div>
+
+    <div class="btn-group">
+        <button onclick="deleteTask()" id="btnDel" style="background:#fceae8; color:var(--red); border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;">🗑️ SUPPRIMER</button>
+        <button onclick="copyToClipboard()" id="btnCopy" style="background:#546e7a; color:white; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;">📋 COPIER</button>
+        <button onclick="closeModal('taskModal')" style="background:var(--surface2); color:var(--text); border:1px solid var(--border); padding:8px; border-radius:4px; font-weight:bold; cursor:pointer; margin-left:auto;">✖ ANNULER</button>
+        <button onclick="saveTask()" style="background:var(--accent); color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">💾 ENREGISTRER</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// INITIALISATION FIREBASE
+const firebaseConfig = {
+  apiKey: "AIzaSyC7J3asi5nSK52LmRiYfhhoW6W46KqArZY",
+  authDomain: "planning-41168.firebaseapp.com",
+  databaseURL: "https://planning-41168-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "planning-41168",
+  storageBucket: "planning-41168.firebasestorage.app",
+  messagingSenderId: "744229246729",
+  appId: "1:744229246729:web:eba1debc02c6c34a6fa5d8"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+firebase.auth().setPersistence(firebase.auth.Auth.Persistence.SESSION);
+
+let selectedBg = "#E8EEF5", selectedTextColor = "#1A4373", draggedTaskId = null, clipboardTask = null;
+let taskHistory = []; 
+let redoHistory = []; 
+let tooltipTimeout = null, lastMouseE = null;
+let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
+
+const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
+
+// ECRAN D'ACCUEIL (Chargement de la liste publique)
+db.ref('planning/collabs').on('value', s => { 
+    state.collabs = s.val() || DEFAULT_COLLABS; 
+    if(!state.user && !state.isAdmin) init(); 
+    else renderPlanning(); 
+});
+
+let authDataLoaded = false;
+let currentYearListener = null;
+
+// DECLENCHE PAR LA CONNEXION : CHARGE LE RESTE DES DONNEES
+function startAuthenticatedData() {
+    if(authDataLoaded) { doLogin(); return; }
+    authDataLoaded = true;
+
+    db.ref('planning/years').on('value', s => { state.years = s.val() || [2026, 2027]; renderYearTabs(); });
+    db.ref('planning/trash').on('value', s => { state.trash = s.val() ? Object.values(s.val()) : []; });
+    db.ref('planning/config').on('value', s => { state.config = s.val() || {lockPast:false}; updateLockBtnUI(); });
+    db.ref('planning/notes').on('value', s => { state.notes = s.val() || {}; renderPlanning(); });
+    
+    loadTasksForYear(state.currentYear);
+}
+
+function loadTasksForYear(year) {
+    if (currentYearListener) db.ref(currentYearListener).off();
+    currentYearListener = `planning/tasks/${year}`;
+    db.ref(currentYearListener).on('value', s => {
+        let t = s.val();
+        state.tasks = t ? (Array.isArray(t) ? t : Object.values(t)) : [];
+        if (!document.getElementById('app').classList.contains('visible')) {
+            doLogin();
+        } else {
+            renderPlanning();
+        }
+    });
+}
+
+firebase.auth().onAuthStateChanged((user) => {
+    if (user) {
+        if (user.email && (user.email.toLowerCase() === 'nicolas.renault@acceo.eu' || user.email.startsWith('admin@'))) {
+            state.isAdmin = true;
+            state.user = { name: "Nicolas R.", code: "Admin" };
+            const toggle = document.getElementById('adminToggle');
+            if(toggle) toggle.classList.add('selected');
+            startAuthenticatedData();
+        } else {
+            state.isAdmin = false;
+            const code = user.email.split('@')[0].toUpperCase();
+            
+            const tryLogin = setInterval(() => {
+                const collabsList = state.collabs.length > 0 ? state.collabs : DEFAULT_COLLABS;
+                const found = collabsList.find(c => c.code === code);
+                if (found) {
+                    state.user = found;
+                    startAuthenticatedData();
+                    clearInterval(tryLogin);
+                } else if (state.collabs.length > 0) {
+                    state.user = { name: "Compte inconnu", code: code, isEditor: false };
+                    startAuthenticatedData();
+                    clearInterval(tryLogin);
+                }
+            }, 50);
+        }
+    } else {
+        state.isAdmin = false;
+        state.user = null;
+        authDataLoaded = false; 
+        document.getElementById('app').classList.remove('visible');
+        document.getElementById('loginScreen').style.display = 'flex';
+        document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('selected'));
+        const errDiv = document.getElementById('collabAuthError');
+        if(errDiv) errDiv.style.display = 'none';
+    }
+});
+
+function syncTasks() { 
+    let tasksByYear = {};
+    state.tasks.forEach(t => {
+        if(!t || !t.date) return;
+        const y = t.date.split('-')[0];
+        if(!tasksByYear[y]) tasksByYear[y] = [];
+        tasksByYear[y].push(t);
+    });
+
+    for(let y in tasksByYear) {
+        db.ref('planning/tasks/' + y).set(tasksByYear[y]);
+    }
+    state.tasks = tasksByYear[state.currentYear] || [];
+}
+
+function syncTrash() { db.ref('planning/trash').set(JSON.parse(JSON.stringify(state.trash))); }
+function syncAdmin() { db.ref('planning').update({ collabs: state.collabs, years: state.years, config: state.config }).catch(err => { alert("Seul l'Administrateur peut modifier la configuration !"); }); }
+
+function logAction(actionStr, details) {
+    if(!state.isAdmin && (!state.user || !state.user.isEditor)) return;
+    const author = state.user ? state.user.code : 'Admin';
+    db.ref('planning/history').push({ ts: Date.now(), author: author, text: actionStr + (details ? ` : ${details}` : '') });
+}
+
+function openHistoryModal() {
+    const list = document.getElementById('historyList');
+    list.innerHTML = "Chargement...";
+    document.getElementById('historyModal').classList.add('open');
+    
+    db.ref('planning/history').orderByChild('ts').limitToLast(100).once('value', snap => {
+        list.innerHTML = "";
+        let items = [];
+        snap.forEach(child => { items.unshift(child.val()); }); 
+        if(items.length === 0) { list.innerHTML = "Aucune activité récente."; return; }
+        
+        items.forEach(i => {
+            let d = new Date(i.ts).toLocaleString('fr-FR');
+            list.innerHTML += `<div style="border-bottom:1px solid var(--border); padding:6px 0;">
+                <span style="color:var(--text-muted)">[${d}]</span> <b>${i.author}</b> a effectué : <i>${i.text}</i>
+            </div>`;
+        });
+    });
+}
+
+function saveHistory() { taskHistory.push(JSON.stringify(state.tasks)); if(taskHistory.length > 20) taskHistory.shift(); redoHistory = []; }
+function undoAction() { if(taskHistory.length > 0) { redoHistory.push(JSON.stringify(state.tasks)); state.tasks = JSON.parse(taskHistory.pop()); syncTasks(); showToast("⟲ Action annulée"); } else { showToast("Rien à annuler"); } }
+function redoAction() { if(redoHistory.length > 0) { taskHistory.push(JSON.stringify(state.tasks)); state.tasks = JSON.parse(redoHistory.pop()); syncTasks(); showToast("⟳ Action rétablie"); } else { showToast("Rien à rétablir"); } }
+function showToast(msg) { const t = document.getElementById('toastMsg'); t.textContent = msg; t.style.opacity = '1'; setTimeout(() => { t.style.opacity = '0'; }, 2000); }
+function toggleDarkMode() { document.body.classList.toggle('dark-mode'); localStorage.setItem('hru_darkmode', document.body.classList.contains('dark-mode')); }
+if(localStorage.getItem('hru_darkmode') === 'true') document.body.classList.add('dark-mode');
+
+window.addEventListener('keydown', (e) => { 
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable) return; 
+        e.preventDefault(); 
+        if(e.shiftKey) redoAction(); else undoAction(); 
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { 
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable) return; 
+        e.preventDefault(); redoAction(); 
+    }
+    if (e.key === "Escape") { 
+        if (clipboardTask) cancelPasteMode();
+        hideTooltip();
+        closeModal('exportModal'); closeModal('historyModal'); closeModal('accessModal'); closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); closeModal('trashModal'); closeModal('statsModal');
+    } 
+    if ((e.key === "Delete" || e.key === "Del") && document.getElementById('taskModal').classList.contains('open') && document.getElementById('editTaskId').value) { 
+        if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable) return; 
+        deleteTask(); 
+    } 
+});
+
+function toggleMobileToolbar() {
+    const items = document.getElementById('toolbarItems');
+    const arrow = document.getElementById('toolbarArrow');
+    if (items.classList.contains('open')) { items.classList.remove('open'); arrow.textContent = '▼'; } 
+    else { items.classList.add('open'); arrow.textContent = '▲'; }
+}
+
+function init() { 
+    const grid = document.getElementById('profileGrid'); 
+    if(!grid) return;
+    grid.innerHTML = ""; 
+    const collabsToRender = state.collabs.length > 0 ? state.collabs : DEFAULT_COLLABS;
+    collabsToRender.forEach((c, index) => { 
+        const btn = document.createElement('div'); btn.className = 'profile-btn'; 
+        btn.id = `collab-btn-${index}`;
+        btn.innerHTML = `
+            <div class="profile-avatar">${c.code}</div>
+            <div style="font-size:11px; font-weight:600">${c.name}</div>
+            <div class="pwd-prompt" id="pwd-prompt-${index}">
+                <input type="password" id="pwd-input-${index}" class="form-input" placeholder="Mot de passe" onclick="event.stopPropagation()" onkeyup="if(event.key==='Enter') loginCollab(${index})">
+                <button onclick="event.stopPropagation(); loginCollab(${index})" style="width:100%; padding:6px; font-size:10px; background:var(--accent); color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer;">Valider</button>
+            </div>
+        `; 
+        btn.onclick = () => handleProfileSelect(btn, c, index); 
+        grid.appendChild(btn); 
+    }); 
+}
+
+function handleProfileSelect(btn, collab, index) { 
+    document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('selected')); 
+    btn.classList.add('selected'); 
+    document.getElementById('adminAuthBlock').style.display = 'none';
+    const errDiv = document.getElementById('collabAuthError');
+    if(errDiv) errDiv.style.display = 'none';
+    setTimeout(() => { document.getElementById(`pwd-input-${index}`).focus(); }, 100);
+}
+
+function handleAdminToggle() { 
+    const authBlock = document.getElementById('adminAuthBlock');
+    authBlock.style.display = authBlock.style.display === 'none' ? 'block' : 'none';
+    document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('selected'));
+    const errDiv = document.getElementById('collabAuthError');
+    if(errDiv) errDiv.style.display = 'none';
+}
+
+function loginCollab(index) {
+    const collabsToUse = state.collabs.length > 0 ? state.collabs : DEFAULT_COLLABS;
+    const collab = collabsToUse[index];
+    const pwdInput = document.getElementById(`pwd-input-${index}`);
+    const pwd = pwdInput.value;
+    const email = `${collab.code.toLowerCase().trim()}@hru.fr`;
+    const errDiv = document.getElementById('collabAuthError');
+
+    if(!pwd) return;
+
+    firebase.auth().signInWithEmailAndPassword(email, pwd)
+    .then(() => { pwdInput.value = ''; })
+    .catch((error) => {
+        errDiv.textContent = "Mot de passe incorrect pour " + collab.name;
+        errDiv.style.display = 'block';
+    });
+}
+
+function loginFirebaseAdmin() {
+    const email = document.getElementById('adminEmail').value.trim();
+    const pwdInput = document.getElementById('adminPwd');
+    const pwd = pwdInput.value;
+    const errDiv = document.getElementById('adminAuthError');
+
+    if(!email || !pwd) { errDiv.textContent = "Veuillez remplir les deux champs."; errDiv.style.display = 'block'; return; }
+
+    firebase.auth().signInWithEmailAndPassword(email, pwd)
+    .then(() => {
+        errDiv.style.display = 'none';
+        document.getElementById('adminEmail').value = '';
+        pwdInput.value = '';
+    })
+    .catch((error) => {
+        errDiv.textContent = "Email ou mot de passe incorrect.";
+        errDiv.style.display = 'block';
+    });
+}
+
+function logoutApp() { firebase.auth().signOut(); }
+
+function doLogin() { 
+    const app = document.getElementById('app');
+    const wasVisible = app.classList.contains('visible');
+    
+    document.getElementById('loginScreen').style.display = 'none'; 
+    app.classList.add('visible'); 
+    
+    const isEditor = state.user && state.user.isEditor;
+    document.getElementById('exportBtn').style.display = 'block';
+
+    if(state.isAdmin) { 
+        document.getElementById('userInfo').textContent = `🔧 Mode Admin (${state.user.name})`; 
+        document.getElementById('accessBtn').style.display = 'block';
+        document.getElementById('historyBtn').style.display = 'block';
+        document.getElementById('newCollabBtn').style.display = 'block'; 
+        document.getElementById('delCollabBtn').style.display = 'block'; 
+        document.getElementById('trashBtn').style.display = 'block'; 
+        document.getElementById('addYearBtn').style.display = 'flex'; 
+        document.getElementById('removeYearBtn').style.display = 'flex'; 
+        document.getElementById('statsBtn').style.display = 'block';
+        document.getElementById('viewFilter').style.display = 'inline-block';
+        document.getElementById('lockBtn').style.display = 'block';
+        updateLockBtnUI();
+    } else if(isEditor) {
+        document.getElementById('userInfo').textContent = `📝 Mode Éditeur (${state.user.name})`; 
+        document.getElementById('accessBtn').style.display = 'none';
+        document.getElementById('historyBtn').style.display = 'none';
+        document.getElementById('newCollabBtn').style.display = 'none'; 
+        document.getElementById('delCollabBtn').style.display = 'none'; 
+        document.getElementById('trashBtn').style.display = 'block'; 
+        document.getElementById('addYearBtn').style.display = 'none'; 
+        document.getElementById('removeYearBtn').style.display = 'none'; 
+        document.getElementById('statsBtn').style.display = 'none';
+        document.getElementById('viewFilter').style.display = 'none';
+        document.getElementById('viewFilter').value = 'all'; 
+        document.getElementById('lockBtn').style.display = 'none';
+    } else {
+        document.getElementById('userInfo').textContent = `👤 Mode Lecture (${state.user.name})`; 
+        document.getElementById('accessBtn').style.display = 'none';
+        document.getElementById('historyBtn').style.display = 'none';
+        document.getElementById('newCollabBtn').style.display = 'none'; 
+        document.getElementById('delCollabBtn').style.display = 'none'; 
+        document.getElementById('statsBtn').style.display = 'none';
+        document.getElementById('viewFilter').style.display = 'none';
+        document.getElementById('viewFilter').value = 'all'; 
+        document.getElementById('lockBtn').style.display = 'none';
+        document.getElementById('trashBtn').style.display = 'none'; 
+        document.getElementById('addYearBtn').style.display = 'none'; 
+        document.getElementById('removeYearBtn').style.display = 'none'; 
+    }
+    
+    renderYearTabs();
+    renderPlanning(); 
+    if(!wasVisible) setTimeout(scrollToToday, 600); 
+}
+
+function openAccessModal() {
+    const container = document.getElementById('accessList');
+    container.innerHTML = state.collabs.map((c, i) => `
+        <label style="display:flex; align-items:center; gap:10px; padding:8px; border-bottom:1px solid var(--border); cursor:pointer;">
+            <input type="checkbox" id="access_chk_${i}" ${c.isEditor ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--accent);">
+            <b>${c.code}</b> — ${c.name}
+        </label>
+    `).join('');
+    document.getElementById('accessModal').classList.add('open');
+}
+
+function saveAccess() {
+    state.collabs.forEach((c, i) => { c.isEditor = document.getElementById(`access_chk_${i}`).checked; });
+    syncAdmin(); closeModal('accessModal'); showToast("🔐 Droits mis à jour");
+}
+
+function toggleLockPast() {
+    if(!state.config) state.config = {};
+    state.config.lockPast = !state.config.lockPast;
+    syncAdmin(); showToast(state.config.lockPast ? "🔒 Passé verrouillé" : "🔓 Passé déverrouillé");
+}
+
+function updateLockBtnUI() {
+    const btn = document.getElementById('lockBtn');
+    if(!btn) return;
+    if(state.config && state.config.lockPast) { btn.innerHTML = "🔒 VERROUILLÉ"; btn.style.background = "#546e7a"; } 
+    else { btn.innerHTML = "🔓 DÉVERROUILLÉ"; btn.style.background = "var(--orange)"; }
+}
+
+function getSortedCollabs() { let list = [...state.collabs]; if (state.customOrder) { list.sort((a, b) => state.customOrder.indexOf(a.code) - state.customOrder.indexOf(b.code)); } if (state.favCollab) { const fav = list.find(c => c.code === state.favCollab); if (fav) list = [fav, ...list.filter(c => c.code !== state.favCollab)]; } return list; }
+
+function formatText(command, value = null) { document.getElementById('taskContent').focus(); document.execCommand(command, false, value); }
+function handleContentEditableKeys(e) {
+    const t = document.getElementById('taskType').value;
+    if (t !== 'Réalisation bureau') return; 
+    if (e.ctrlKey || e.metaKey) {
+        if (e.key.toLowerCase() === 'b') { e.preventDefault(); formatText('bold'); }
+        if (e.key.toLowerCase() === 'i') { e.preventDefault(); formatText('italic'); }
+        if (e.key.toLowerCase() === 'u') { e.preventDefault(); formatText('underline'); }
+    }
+}
+function handlePaste(e) { e.preventDefault(); const text = (e.originalEvent || e).clipboardData.getData('text/plain'); document.execCommand('insertText', false, text); }
+
+function openExportModal() {
+    document.getElementById('exportDate').value = getLocalDateString(new Date());
+    if(state.isAdmin) {
+        document.getElementById('exportCollabGroup').style.display = 'block';
+        document.getElementById('exportCollab').innerHTML = state.collabs.map(c => `<option value="${c.code}">${c.code} - ${c.name}</option>`).join('');
+    } else {
+        document.getElementById('exportCollabGroup').style.display = 'none';
+    }
+    document.getElementById('exportModal').classList.add('open');
+}
+
+function downloadICS() {
+    const dateVal = document.getElementById('exportDate').value;
+    if(!dateVal) return alert("Veuillez choisir une date.");
+    
+    let targetCollab = state.user.code;
+    if (state.isAdmin) targetCollab = document.getElementById('exportCollab').value;
+
+    const d = new Date(dateVal); const day = d.getDay() || 7; 
+    const monday = new Date(d); monday.setDate(d.getDate() - day + 1);
+    const sunday = new Date(monday); sunday.setDate(monday.getDate() + 6);
+    
+    const mondayStr = getLocalDateString(monday); const sundayStr = getLocalDateString(sunday);
+    let events = state.tasks.filter(t => t.collab === targetCollab && t.date >= mondayStr && t.date <= sundayStr);
+    
+    if(events.length === 0) return alert("Aucune tâche trouvée pour cette semaine.");
+
+    let icsContent = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//HRU Planning//FR\r\n";
+    const stripHtml = (html) => { let tmp = document.createElement("DIV"); tmp.innerHTML = html; return tmp.textContent || tmp.innerText || ""; };
+    const safeText = (text) => stripHtml(text || '').replace(/[\r\n]+/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
+
+    events.forEach(t => {
+        let [yy, mm, dd] = t.date.split('-');
+        let startH = "09", startM = "00", endH = "12", endM = "00";
+        if (t.period === "Apr.Midi") { startH = "14"; endH = "18"; }
+        
+        let isAllDay = false;
+        if (t.type === "Absence") isAllDay = true;
+        else if (t.time) {
+            let match = t.time.match(/(\d{1,2})[h:](\d{2})?/i);
+            if(match) { startH = match[1].padStart(2, '0'); startM = match[2] ? match[2].padStart(2, '0') : "00"; endH = String(parseInt(startH) + 2).padStart(2, '0'); endM = startM; }
+        }
+        
+        let dtStart = `${yy}${mm}${dd}T${startH}${startM}00`; let dtEnd = `${yy}${mm}${dd}T${endH}${endM}00`;
+        const noteData = state.notes && state.notes[t.id];
+        const nTxt = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
+        
+        let summary = safeText(`${t.type} - ${t.content}`);
+        let descParts = [`Type: ${t.type}`, `Description: ${stripHtml(t.content)}`];
+        if(t.prestations) descParts.push(`Prestations: ${t.prestations}`);
+        if(nTxt) descParts.push(`Note: ${nTxt}`);
+        let desc = safeText(descParts.join('\n'));
+        let loc = safeText(t.location);
+
+        icsContent += "BEGIN:VEVENT\r\nUID:"+t.id+"@hru.fr\r\n"; 
+        if(isAllDay) {
+            let nextD = new Date(yy, parseInt(mm)-1, dd); nextD.setDate(nextD.getDate() + 1);
+            let nyy = nextD.getFullYear(), nmm = String(nextD.getMonth()+1).padStart(2,'0'), ndd = String(nextD.getDate()).padStart(2,'0');
+            icsContent += `DTSTART;VALUE=DATE:${yy}${mm}${dd}\r\nDTEND;VALUE=DATE:${nyy}${nmm}${ndd}\r\n`;
+        } else {
+            icsContent += `DTSTART:${dtStart}\r\nDTEND:${dtEnd}\r\n`;
+        }
+        icsContent += `SUMMARY:${summary}\r\n`;
+        if (loc) icsContent += `LOCATION:${loc}\r\n`;
+        icsContent += `DESCRIPTION:${desc}\r\nEND:VEVENT\r\n`;
+    });
+    icsContent += "END:VCALENDAR";
+    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `Agenda_${targetCollab}_S${getWeekNumber(new Date(dateVal))}.ics`;
+    link.click(); closeModal('exportModal'); showToast("📅 Agenda exporté !");
+}
+
+function getWeekNumber(d) {
+    d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+    d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay()||7));
+    return Math.ceil((((d - new Date(Date.UTC(d.getUTCFullYear(),0,1))) / 86400000) + 1)/7);
+}
+
+function showTooltip(e, task) {
+    const tt = document.getElementById('customTooltip');
+    const noteData = state.notes && state.notes[task.id];
+    const nTxt = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
+    const nAuth = noteData ? (typeof noteData === 'string' ? 'Inconnu' : noteData.author) : "";
+
+    let html = `<div style="text-transform:uppercase; font-size:9px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">${task.type}</div>`;
+    html += `<div style="font-size:12px; font-weight:normal; margin-bottom:6px;">${(task.content || '').replace(/\n/g, '<br>')}</div>`;
+
+    if(task.time) html += `<div><b>⏰ Horaire:</b> ${task.time}</div>`;
+    if(task.location) html += `<div><b>📍 Lieu:</b> ${task.location}</div>`;
+    if(task.prestations) html += `<div style="margin-top:6px;"><b>Détail:</b><br>${task.prestations.replace(/\n/g, '<br>')}</div>`;
+
+    if(nTxt) {
+        html += `<div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
+            <div style="font-size:9px; font-weight:bold; color:var(--text-muted); margin-bottom:2px;">📝 NOTE DE RETOUR (${nAuth})</div>
+            <div style="font-style:italic;">${nTxt.replace(/\n/g, '<br>')}</div>
+        </div>`;
+    }
+
+    tt.innerHTML = html; tt.style.display = 'block'; moveTooltip(e);
+}
+
+function moveTooltip(e) {
+    const tt = document.getElementById('customTooltip');
+    if(tt.style.display === 'none') return;
+    let x = e.clientX + 15, y = e.clientY + 15;
+    if(x + tt.offsetWidth > window.innerWidth) x = e.clientX - tt.offsetWidth - 15;
+    if(y + tt.offsetHeight > window.innerHeight) y = e.clientY - tt.offsetHeight - 15;
+    tt.style.left = x + 'px'; tt.style.top = y + 'px';
+}
+function hideTooltip() { document.getElementById('customTooltip').style.display = 'none'; }
+
+function jumpToDate(val) {
+    if(!val) return;
+    const target = document.getElementById('date-row-' + val);
+    if(target) {
+        document.getElementById('scrollContainer').scrollTo({ top: target.offsetTop - 100, behavior: 'smooth' });
+        target.style.transition = 'background 0.5s'; target.style.backgroundColor = '#ffff99';
+        setTimeout(() => { target.style.backgroundColor = ''; }, 2000);
+    } else { showToast("Date introuvable sur cette année"); }
+}
+
+window.copyPath = function(e, btn) {
+    e.stopPropagation();
+    navigator.clipboard.writeText(btn.getAttribute('data-path')).then(() => { showToast("📁 Chemin copié !"); });
+};
+
+function renderPlanning() {
+  const head = document.getElementById('planningHead'); const body = document.getElementById('planningBody');
+  const sortedCollabs = getSortedCollabs();
+  head.innerHTML = `<tr><th class="col-date-header">Date</th><th class="col-period-header">Période</th>${sortedCollabs.map(c => `<th><span class="th-tri">${c.code}</span><span class="th-name">${c.name}</span></th>`).join('')}</tr>`;
+  body.innerHTML = "";
+  
+  const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+  const filterType = document.getElementById('viewFilter').value;
+  const canEdit = state.isAdmin || (state.user && state.user.isEditor);
+  const todayStr = getLocalDateString(new Date());
+  
+  const now = new Date(); const currentMonday = new Date(now);
+  currentMonday.setDate(now.getDate() - (now.getDay() || 7) + 1); currentMonday.setHours(0,0,0,0);
+
+  let currentDate = new Date(state.currentYear, 0, 1);
+  let dayOffset = currentDate.getDay(); currentDate.setDate(currentDate.getDate() + (dayOffset === 0 ? -6 : 1 - dayOffset));
+
+  for (let w = 0; w < 53; w++) {
+    let weekStart = new Date(currentDate); weekStart.setDate(currentDate.getDate() + (w * 7));
+    if (weekStart.getFullYear() > state.currentYear && weekStart.getMonth() > 0) break;
+    const weekNumRow = document.createElement('tr');
+    const weekNum = Math.ceil((((weekStart - new Date(weekStart.getFullYear(),0,1))/864e5)+new Date(weekStart.getFullYear(),0,1).getUTCDay()+1)/7);
+    weekNumRow.innerHTML = `<td colspan="${sortedCollabs.length + 2}" class="week-row-head">SEMAINE ${weekNum}</td>`;
+    body.appendChild(weekNumRow);
+
+    for (let i = 0; i < 7; i++) {
+        let day = new Date(weekStart); day.setDate(weekStart.getDate() + i);
+        let dStr = getLocalDateString(day), isT = dStr === todayStr, isW = (day.getDay() === 0 || day.getDay() === 6);
+        let isLocked = (state.config && state.config.lockPast && day < currentMonday);
+
+        let dayClass = (i % 2 === 0) ? 'day-even' : 'day-odd';
+        if (isW) dayClass += ' row-weekend';
+        if (isLocked) dayClass += ' locked-row';
+        
+        let periods = isW ? ['Weekend'] : ['Matin', 'Apr.Midi'];
+        periods.forEach((p, pIndex) => {
+            const row = document.createElement('tr'); row.className = dayClass;
+            if(pIndex === 0) row.id = `date-row-${dStr}`; 
+            if(pIndex === periods.length - 1) row.classList.add('row-day-end');
+            if(isT) { row.classList.add('row-today'); if(pIndex === 0) row.id = 'todayMarker'; }
+            
+            let rS = isW ? 1 : 2;
+            let lockIcon = (isLocked && pIndex === 0) ? ' <span title="Semaine verrouillée">🔒</span>' : '';
+            let dC = pIndex === 0 ? `<td class="col-date ${isW ? "col-date-end" : ""}" rowspan="${rS}">${day.toLocaleDateString('fr-FR', {weekday:'short', day:'numeric', month:'short'}).replace('.', '')}${lockIcon}</td>` : '';
+            row.innerHTML = `${dC}<td class="col-period">${isW ? "" : p}</td>`;
+            
+            sortedCollabs.forEach(c => {
+                const cell = document.createElement('td');
+                if(isLocked) cell.classList.add('locked-cell');
+                
+                if(canEdit && !isLocked) {
+                    cell.ondragover = (e) => { e.preventDefault(); };
+                    cell.ondrop = (e) => {
+                        e.preventDefault(); e.stopPropagation();
+                        if(draggedTaskId) {
+                            saveHistory(); 
+                            const taskEl = e.target.closest('[data-task-id]');
+                            const targetTaskId = taskEl ? taskEl.dataset.taskId : null;
+                            const draggedTask = state.tasks.find(t => String(t.id) === String(draggedTaskId));
+                            if(!draggedTask) return;
+
+                            if (targetTaskId && String(targetTaskId) !== String(draggedTaskId)) {
+                                const targetTask = state.tasks.find(t => String(t.id) === String(targetTaskId));
+                                if (targetTask) {
+                                    if (draggedTask.date === targetTask.date && draggedTask.period === targetTask.period && draggedTask.collab === targetTask.collab) {
+                                        const tmpPos = draggedTask.position; draggedTask.position = targetTask.position; targetTask.position = tmpPos;
+                                    } else {
+                                        draggedTask.date = dStr; draggedTask.period = p; draggedTask.collab = c.code; draggedTask.position = targetTask.position + 1;
+                                    }
+                                }
+                            } else {
+                                draggedTask.date = dStr; draggedTask.period = p; draggedTask.collab = c.code; draggedTask.position = Date.now();
+                            }
+                            syncTasks(); draggedTaskId = null; 
+                            
+                            let tmp = document.createElement("DIV"); tmp.innerHTML = draggedTask.content;
+                            logAction("Déplacement", tmp.textContent || tmp.innerText);
+                        }
+                    };
+                }
+
+                cell.onclick = (e) => { 
+                  if(canEdit && !isLocked) {
+                    if(clipboardTask) { e.stopPropagation(); pasteTask(dStr, p, c.code); }
+                    else { openModalTask({date:dStr, period:p, collab:c.code}); }
+                  } else if (isLocked && canEdit) { showToast("🔒 Cette période est verrouillée"); }
+                };
+                
+                let dayTasksRaw = state.tasks.filter(t => t.date === dStr && t.period === p && t.collab === c.code).sort((a,b) => (a.position || 0) - (b.position || 0));
+                
+                let dayTasks = dayTasksRaw;
+                if(filterType === "prod") dayTasks = dayTasksRaw.filter(t => t.type !== "Absence");
+                if(filterType === "abs") dayTasks = dayTasksRaw.filter(t => t.type === "Absence");
+                if(filterType === "site") dayTasks = dayTasksRaw.filter(t => t.type === "Intervention site");
+                if(filterType === "bureau") dayTasks = dayTasksRaw.filter(t => t.type === "Réalisation bureau");
+                if(filterType === "livrables") dayTasks = dayTasksRaw.filter(t => t.type === "Envoi livrables" || t.type === "Envoi AO");
+                if(filterType === "reunion") dayTasks = dayTasksRaw.filter(t => t.type === "Réunion");
+
+                let cellHasMatch = false;
+                const container = document.createElement('div'); container.className = 'cell-tasks-container';
+
+                dayTasks.forEach(task => {
+                    const noteData = state.notes && state.notes[task.id];
+                    const noteIndicator = noteData ? `<div class="task-note-icon">📝</div>` : '';
+                    const safeContent = (task.content || '').replace(/\n/g, '<br>');
+
+                    const div = document.createElement('div');
+                    if (task.type === "Absence") {
+                        div.className = "cell-absence"; 
+                        div.innerHTML = `<span>${safeContent}</span>${noteIndicator}`;
+                    } else {
+                        div.className = `task-item ${task.type === "Intervention site" ? "type-intervention" : task.type === "Réalisation bureau" ? "type-bureau" : task.type === "Réunion" ? "type-reunion" : task.type === "Envoi livrables" ? "type-livrable" : "type-ao"}`;
+                        if(task.type === "Réalisation bureau") div.style.borderColor = task.textColor;
+                        else if (!task.type.includes("Envoi") && task.type !== "Réunion") { div.style.background = task.bg; div.style.color = task.textColor; div.style.borderLeftColor = task.textColor; }
+                        div.innerHTML = `${noteIndicator}<span class="task-desc">${safeContent}</span>${(task.type === "Réunion" || task.type === "Intervention site") && task.time ? `<span class="task-time-inline">⏰ ${task.time}</span>`:''}${task.location && (task.type === "Intervention site" || task.type === "Réunion") ? `<span class="task-location">📍 ${task.location}</span>`:''}`;
+                    }
+
+                    div.removeAttribute('title'); 
+                    div.onmouseenter = (e) => { lastMouseE = e; clearTimeout(tooltipTimeout); tooltipTimeout = setTimeout(() => showTooltip(lastMouseE, task), 500); };
+                    div.onmousemove = (e) => { lastMouseE = e; moveTooltip(e); };
+                    div.onmouseleave = () => { clearTimeout(tooltipTimeout); hideTooltip(); };
+                    
+                    if (searchTerm) {
+                        let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
+                        const textString = `${tmp.textContent} ${task.location} ${task.type}`.toLowerCase();
+                        if (!textString.includes(searchTerm)) div.classList.add('dimmed');
+                        else cellHasMatch = true;
+                    } else { cellHasMatch = true; }
+
+                    div.onclick = (e) => { 
+                        e.stopPropagation(); clearTimeout(tooltipTimeout); hideTooltip();
+                        if (canEdit && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
+                        else if (canEdit && !isLocked) openModalTask(task); 
+                        else openConsultationTask(task); 
+                    };
+                    if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { clearTimeout(tooltipTimeout); hideTooltip(); draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
+                    container.appendChild(div);
+                });
+                
+                cell.appendChild(container);
+                if (searchTerm && !cellHasMatch && dayTasks.length === 0) cell.style.opacity = '0.3';
+                row.appendChild(cell);
+            });
+            body.appendChild(row);
+            if (!isW && pIndex === 1) row.previousElementSibling.querySelector('.col-date').classList.add('col-date-end');
+        });
     }
   }
 }
+
+function pasteTask(date, period, collab) { 
+  if(!clipboardTask) return; 
+  saveHistory();
+  state.tasks.push({ ...clipboardTask, id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9), date: date, period: period, collab: collab, position: Date.now() }); 
+  syncTasks();
+  
+  let tmp = document.createElement("DIV"); tmp.innerHTML = clipboardTask.content;
+  logAction("Copie", tmp.textContent || tmp.innerText);
+  showToast("📋 Collé"); 
+}
+
+function copyToClipboard() { 
+    const currentId = document.getElementById('editTaskId').value; 
+    const task = state.tasks.find(t => String(t.id) === String(currentId)); 
+    if (task) { 
+        clipboardTask = { 
+            type: task.type || 'Intervention site', 
+            content: task.content || '', 
+            location: task.location || '', 
+            time: task.time || '', 
+            prestations: task.prestations || '', 
+            url: task.url || '', 
+            bg: task.bg || selectedBg, 
+            textColor: task.textColor || selectedTextColor 
+        }; 
+        closeModal('taskModal'); 
+        document.getElementById('clipboardBar').style.display = 'flex'; 
+        showToast("📋 Tâche copiée"); 
+    } 
+}
+
+function saveTask() {
+  saveHistory();
+  const id = document.getElementById('editTaskId').value;
+  const groupId = document.getElementById('taskGroupId').value || Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
+  const modal = document.getElementById('taskModal');
+  const type = document.getElementById('taskType').value;
+  const binomeCode = document.getElementById('taskBinome').value;
+  const recurrence = parseInt(document.getElementById('taskRecurrence').value) || 1;
+  const urlValue = document.getElementById('taskUrl').value;
+  const noteText = document.getElementById('taskAdminNote').value;
+  const noteAuthor = state.isAdmin ? "Admin" : (state.user ? state.user.code : "Inconnu");
+  const isFullDay = document.getElementById('taskFullDay') && document.getElementById('taskFullDay').checked;
+  
+  const existingTask = id ? state.tasks.find(x => String(x.id) === String(id)) : null;
+
+  let contentVal = document.getElementById('taskContent').innerHTML;
+  if(type === 'Absence') contentVal = document.getElementById('absenceVal').value;
+  if(type !== 'Réalisation bureau' && type !== 'Absence') {
+      let tmpDiv = document.createElement("DIV"); tmpDiv.innerHTML = contentVal;
+      contentVal = tmpDiv.textContent || tmpDiv.innerText;
+  }
+
+  const baseData = {
+    type: type, content: contentVal,
+    location: document.getElementById('taskLocation').value, time: document.getElementById('taskTime').value,
+    prestations: document.getElementById('taskPrestations').value, url: urlValue, bg: selectedBg, textColor: selectedTextColor, position: existingTask ? existingTask.position : Date.now()
+  };
+
+  let tasksToUpdateNotes = [];
+  let baseDateStr = modal.dataset.date;
+  let basePeriod = modal.dataset.period;
+
+  if (id) {
+    baseDateStr = existingTask.date;
+    basePeriod = existingTask.period;
+
+    const otherHalfTask = state.tasks.find(t => t.date === existingTask.date && t.collab === existingTask.collab && t.period !== existingTask.period && t.type === existingTask.type && t.content === existingTask.content && t.id !== existingTask.id);
+
+    if (existingTask && existingTask.groupId) {
+        state.tasks.forEach(t => {
+            if(String(t.groupId) === String(existingTask.groupId) && String(t.id) !== String(id)) {
+                db.ref('planning/notes/' + t.id).remove();
+                delete state.notes[t.id];
+            }
+        });
+        state.tasks = state.tasks.filter(t => String(t.groupId) !== String(existingTask.groupId));
+    }
+    state.tasks = state.tasks.filter(t => String(t.id) !== String(id));
+
+    if (otherHalfTask) {
+        if (otherHalfTask.groupId) {
+             state.tasks.forEach(t => {
+                if(String(t.groupId) === String(otherHalfTask.groupId) && String(t.id) !== String(otherHalfTask.id)) {
+                    db.ref('planning/notes/' + t.id).remove();
+                    delete state.notes[t.id];
+                }
+            });
+            state.tasks = state.tasks.filter(t => String(t.groupId) !== String(otherHalfTask.groupId));
+        }
+        state.tasks = state.tasks.filter(t => String(t.id) !== String(otherHalfTask.id));
+        db.ref('planning/notes/' + otherHalfTask.id).remove();
+        delete state.notes[otherHalfTask.id];
+    }
+  }
+
+  const originalDateObj = new Date(baseDateStr);
+  const isRecurrentType = (type === 'Intervention site' || type === 'Réunion');
+  const loops = isRecurrentType ? recurrence : 1;
+
+  let periodsToSave = [basePeriod];
+  if (isFullDay) { periodsToSave = ['Matin', 'Apr.Midi']; }
+
+  for(let i = 0; i < loops; i++) {
+      let currentRecurrenceDate = new Date(originalDateObj);
+      currentRecurrenceDate.setDate(currentRecurrenceDate.getDate() + (i * 7)); 
+      let dateStr = getLocalDateString(currentRecurrenceDate);
+      let recGroupId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
+      
+      periodsToSave.forEach(p => {
+          let newMainId;
+          if (id && i === 0 && p === basePeriod) {
+              newMainId = id; 
+          } else {
+              newMainId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9);
+          }
+
+          let currentTaskData = { ...baseData };
+          if (isFullDay && p === 'Apr.Midi') {
+              currentTaskData.time = "";
+              currentTaskData.location = "";
+          }
+
+          state.tasks.push({
+              ...currentTaskData,
+              id: newMainId,
+              date: dateStr,
+              period: p,
+              collab: document.getElementById('taskCollab').value,
+              groupId: binomeCode ? String(recGroupId) : null,
+              position: (existingTask && i===0 && p===basePeriod) ? existingTask.position : Date.now() + i
+          });
+          tasksToUpdateNotes.push(newMainId);
+
+          if (binomeCode && type !== 'Absence') {
+              let newBinomeId = Date.now().toString() + '_' + Math.random().toString(36).substr(2, 9) + 'b';
+              state.tasks.push({
+                  ...currentTaskData,
+                  id: newBinomeId,
+                  date: dateStr,
+                  period: p,
+                  collab: binomeCode,
+                  groupId: String(recGroupId),
+                  position: (existingTask && i===0 && p===basePeriod) ? existingTask.position : Date.now() + i
+              });
+              tasksToUpdateNotes.push(newBinomeId);
+          }
+      });
+  }
+
+  tasksToUpdateNotes.forEach(tId => {
+      if (noteText.trim() !== "") {
+          state.notes[tId] = { text: noteText, author: noteAuthor };
+          db.ref('planning/notes/' + tId).set(state.notes[tId]);
+      } else {
+          if(state.notes[tId]) {
+              delete state.notes[tId];
+              db.ref('planning/notes/' + tId).remove();
+          }
+      }
+  });
+
+  syncTasks(); 
+  let tmp = document.createElement("DIV"); tmp.innerHTML = baseData.content;
+  logAction(id ? "Modification" : "Création", tmp.textContent || tmp.innerText);
+  closeModal('taskModal');
+  showToast("💾 Enregistré");
+}
+
+function scrollToToday() { const c = document.getElementById('scrollContainer'); const r = document.getElementById('todayMarker'); if (r && c) { c.scrollTo({ top: r.offsetTop - (c.offsetHeight / 3), behavior: 'smooth' }); } }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function cancelPasteMode() { clipboardTask = null; document.getElementById('clipboardBar').style.display = 'none'; }
+function handleZoom(val) { if(val == 1) document.body.classList.add('zoom-out'); else document.body.classList.remove('zoom-out'); }
+function selectColor(opt) { document.querySelectorAll('.color-option').forEach(o => o.classList.remove('selected')); opt.classList.add('selected'); selectedBg = opt.dataset.bg; selectedTextColor = opt.dataset.text; }
+
+function prepareForNewTask() { 
+    document.getElementById('taskBinome').value = ''; 
+    document.getElementById('addBinomeBtn').style.display = 'block';
+    document.getElementById('taskBinome').style.display = 'none';
+    document.getElementById('editTaskId').value = ''; 
+    document.getElementById('taskGroupId').value = ''; 
+    document.getElementById('taskContent').innerHTML = ''; 
+    document.getElementById('taskLocation').value = ''; 
+    document.getElementById('taskPrestations').value = ''; 
+    document.getElementById('taskTime').value = ''; 
+    document.getElementById('taskUrl').value = ''; 
+    document.getElementById('taskAdminNote').value = ''; 
+    document.getElementById('taskRecurrence').value = '1'; 
+    if(document.getElementById('taskFullDay')) document.getElementById('taskFullDay').checked = false;
+    toggleType(); 
+}
+
+function openFavModal() { const container = document.getElementById('collabFavList'); container.innerHTML = ""; const list = getSortedCollabs(); list.forEach((c, index) => { const isSelectedFav = state.favCollab === c.code; const item = document.createElement('div'); item.className = `collab-list-item ${isSelectedFav ? 'is-fav' : ''}`; item.innerHTML = `<div onclick="setFav('${c.code}')"><b>${c.code} — ${c.name}</b>${isSelectedFav ? '<span class="fav-star">⭐</span>' : ''}</div><div style="display:flex;gap:5px;"><button class="move-btn" onclick="moveCollab(${index},-1,event)">↑</button><button class="move-btn" onclick="moveCollab(${index},1,event)">↓</button></div>`; container.appendChild(item); }); document.getElementById('favModal').classList.add('open'); }
+function setFav(code) { state.favCollab = code; localStorage.setItem('hru_fav', code); openFavModal(); renderPlanning(); }
+function resetFav() { state.favCollab = null; state.customOrder = null; localStorage.removeItem('hru_fav'); localStorage.removeItem('hru_order'); closeModal('favModal'); renderPlanning(); }
+function deleteTask() { 
+    saveHistory(); 
+    const id = document.getElementById('editTaskId').value; 
+    const tIdx = state.tasks.findIndex(t => String(t.id) === String(id)); 
+    if (tIdx > -1) { 
+        const task = state.tasks[tIdx]; 
+        task.deletedAt = Date.now(); 
+        state.trash.push(task); 
+        state.tasks.splice(tIdx, 1); 
+        syncTasks(); syncTrash(); 
+        
+        let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
+        logAction("Suppression", tmp.textContent || tmp.innerText); 
+        
+        closeModal('taskModal'); showToast("🗑️ Supprimé"); 
+    } 
+}
+
+function openTrashModal() { 
+    const list = document.getElementById('trashList'); list.innerHTML = ""; 
+    if (state.trash.length === 0) list.innerHTML = "<div style='padding:20px; text-align:center; color:var(--text-muted);'>Vide</div>"; 
+    state.trash.sort((a,b) => b.deletedAt - a.deletedAt).forEach((t, idx) => { 
+        const item = document.createElement('div'); item.className = 'trash-list-item'; 
+        let tmp = document.createElement("DIV"); tmp.innerHTML = t.content;
+        item.innerHTML = `<div><div style="font-weight:bold;">${t.collab} : ${tmp.textContent || tmp.innerText}</div><div style="font-size:10px; color:var(--text-muted);">${t.date}</div></div><button class="restore-btn" onclick="restoreTask(${idx})">RESTAURER</button>`; 
+        list.appendChild(item); 
+    }); 
+    document.getElementById('trashModal').classList.add('open'); 
+}
+
+function emptyTrash() { if(state.trash.length === 0) return showToast("La corbeille est déjà vide"); if(confirm("Vider définitivement la corbeille ? Action irréversible.")) { saveHistory(); state.trash = []; syncTrash(); openTrashModal(); showToast("🗑️ Corbeille vidée"); } }
+
+function restoreTask(indexInTrash) { 
+    saveHistory(); 
+    const task = state.trash.splice(indexInTrash, 1)[0]; delete task.deletedAt; state.tasks.push(task); syncTasks(); syncTrash(); 
+    
+    let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
+    logAction("Restauration", tmp.textContent || tmp.innerText); 
+    
+    openTrashModal(); showToast("✅ Restauré"); 
+}
+function cleanTrash() { const h48 = 48 * 3600 * 1000; const now = Date.now(); state.trash = state.trash.filter(t => (now - t.deletedAt) < h48); syncTrash(); }
+
+function openConsultationTask(task) { 
+    const container = document.getElementById('viewContentArea'); container.innerHTML = ""; 
+    const addField = (label, value) => { 
+        if (!value || value.trim() === "") return; 
+        const wrap = document.createElement('div'); wrap.className = "view-item"; 
+        wrap.innerHTML = `<div class="view-label">${label}</div><div class="view-value">${value}</div>`; 
+        container.appendChild(wrap); 
+    }; 
+    
+    const safeContent = (task.content || '').replace(/\n/g, '<br>');
+    const safePrestations = (task.prestations || '').replace(/\n/g, '<br>');
+
+    addField("Type", task.type); addField("Description", safeContent); addField("Horaire", task.time); addField("Lieu", task.location); addField("Détail prestations", safePrestations); 
+    
+    if(task.url) {
+        addField("Dossier Serveur", `<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <code style="background:var(--bg); padding:4px 8px; border-radius:4px; font-size:11px; word-break:break-all; border:1px solid var(--border);">${task.url}</code>
+            <button onclick="copyPath(event, this)" data-path="${task.url.replace(/"/g, '&quot;')}" style="border:none; background:var(--accent); color:white; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:10px; font-weight:bold;">COPIER</button>
+        </div>`);
+    }
+    
+    const noteData = state.notes && state.notes[task.id];
+    document.getElementById('consultNoteTaskId').value = task.id;
+    document.getElementById('consultNoteArea').value = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
+    
+    const hideConsultNote = (task.type === 'Absence' && (task.content === 'CP' || task.content === 'FÉRIÉ'));
+    document.getElementById('consultNoteContainer').style.display = hideConsultNote ? 'none' : 'block';
+
+    document.getElementById('viewModal').classList.add('open'); 
+}
+
+function saveNote() {
+    const taskId = document.getElementById('consultNoteTaskId').value;
+    const noteText = document.getElementById('consultNoteArea').value;
+    const noteAuthor = state.user ? state.user.code : "Inconnu";
+
+    const task = state.tasks.find(t => String(t.id) === String(taskId));
+    let tasksToUpdate = [taskId];
+
+    if (task && task.groupId) {
+        const groupTasks = state.tasks.filter(t => String(t.groupId) === String(task.groupId));
+        tasksToUpdate = groupTasks.map(t => t.id);
+    }
+
+    tasksToUpdate.forEach(tId => {
+        if (noteText.trim() === "") db.ref('planning/notes/' + tId).remove();
+        else db.ref('planning/notes/' + tId).set({ text: noteText, author: noteAuthor });
+    });
+
+    let tmp = document.createElement("DIV"); tmp.innerHTML = task ? task.content : "";
+    logAction(noteText.trim() === "" ? "Suppression Note" : "Modif. Note", tmp.textContent || tmp.innerText);
+    
+    showToast(noteText.trim() === "" ? "📝 Note supprimée" : "📝 Note enregistrée");
+    closeModal('viewModal');
+}
+
+function openModalTask(task) {
+  const modal = document.getElementById('taskModal');
+  modal.dataset.date = task.date; 
+  modal.dataset.period = task.period;
+  
+  document.getElementById('taskBinome').value = ''; 
+  document.getElementById('addBinomeBtn').style.display = 'block';
+  document.getElementById('taskBinome').style.display = 'none';
+
+  document.getElementById('editTaskId').value = task.id || '';
+  document.getElementById('taskGroupId').value = task.groupId || '';
+  document.getElementById('taskCollab').value = task.collab;
+  document.getElementById('taskContent').innerHTML = task.content || '';
+  document.getElementById('taskLocation').value = task.location || '';
+  document.getElementById('taskTime').value = task.time || '';
+  document.getElementById('taskPrestations').value = task.prestations || '';
+  document.getElementById('taskUrl').value = task.url || '';
+  document.getElementById('taskType').value = task.type || 'Intervention site';
+  document.getElementById('taskRecurrence').value = '1';
+  
+  const otherHalfTask = state.tasks.find(t => t.date === task.date && t.collab === task.collab && t.period !== task.period && t.type === task.type && t.content === task.content && t.id !== task.id);
+  if(document.getElementById('taskFullDay')) document.getElementById('taskFullDay').checked = !!otherHalfTask;
+
+  const noteData = state.notes && state.notes[task.id];
+  document.getElementById('taskAdminNote').value = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : '';
+  
+  if (task.id) {
+    selectedBg = task.bg; selectedTextColor = task.textColor;
+    document.querySelectorAll('.color-option').forEach(o => { o.classList.toggle('selected', o.dataset.bg === selectedBg); });
+  }
+
+  if (task.groupId) {
+    const other = state.tasks.find(t => String(t.groupId) === String(task.groupId) && t.collab !== task.collab);
+    if (other) { showBinomeSelect(); document.getElementById('taskBinome').value = other.collab; }
+  }
+  document.getElementById('btnDel').style.display = task.id ? 'block' : 'none';
+  document.getElementById('btnCopy').style.display = task.id ? 'block' : 'none';
+  toggleType(); modal.classList.add('open');
+}
+
+function openStatsModal() {
+    const body = document.getElementById('statsBody'); body.innerHTML = "";
+    let stats = {};
+    state.collabs.forEach(c => { stats[c.code] = { name: c.name, interventions: 0, bureau: 0, absence: 0 }; });
+
+    state.tasks.forEach(t => {
+        if(!stats[t.collab]) return;
+        if(t.type === "Intervention site") stats[t.collab].interventions += 1;
+        if(t.type === "Réalisation bureau") stats[t.collab].bureau += 1;
+        if(t.type === "Absence") stats[t.collab].absence += 0.5; 
+    });
+
+    Object.values(stats).forEach(s => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td><b>${s.name}</b></td><td>${s.interventions}</td><td>${s.bureau}</td><td>${s.absence} j</td>`;
+        body.appendChild(tr);
+    });
+    document.getElementById('statsModal').classList.add('open');
+}
+
+function showBinomeSelect() { const select = document.getElementById('taskBinome'); const btn = document.getElementById('addBinomeBtn'); const currentMain = document.getElementById('taskCollab').value; select.innerHTML = '<option value="">-- Sélectionner binôme --</option>'; state.collabs.filter(c => c.code !== currentMain).forEach(c => { select.innerHTML += `<option value="${c.code}">${c.name} (${c.code})</option>`; }); btn.style.display = 'none'; select.style.display = 'block'; }
+function handleBinomeChange() { if (document.getElementById('taskBinome').value === "") { document.getElementById('addBinomeBtn').style.display = 'block'; document.getElementById('taskBinome').style.display = 'none'; } }
+
+function toggleType() { 
+    const t = document.getElementById('taskType').value; 
+    const isAbs = t === 'Absence'; const isBureau = t === 'Réalisation bureau'; 
+
+    document.getElementById('binomeSection').style.display = isAbs ? 'none' : 'block'; 
+    document.getElementById('groupTime').style.display = (t === 'Intervention site' || t === 'Réunion') ? 'block' : 'none'; 
+    document.getElementById('groupPrestations').style.display = (t === 'Intervention site' || isBureau) ? 'block' : 'none'; 
+    document.getElementById('groupLocation').style.display = (t === 'Intervention site' || t === 'Réunion') ? 'block' : 'none'; 
+    document.getElementById('groupAbsence').style.display = isAbs ? 'block' : 'none'; 
+    document.getElementById('groupContent').style.display = isAbs ? 'none' : 'block'; 
+    document.getElementById('groupColors').style.display = (isAbs || t.includes('Envoi') || t === 'Réunion') ? 'none' : 'block'; 
+    document.getElementById('groupUrl').style.display = isAbs ? 'none' : 'block'; 
+    document.getElementById('groupRecurrence').style.display = (t === 'Intervention site' || t === 'Réunion') ? 'block' : 'none';
+
+    const rtToolbar = document.getElementById('richTextToolbar');
+    if (rtToolbar) rtToolbar.style.display = isBureau ? 'flex' : 'none';
+
+    const wrapper = document.getElementById('fullDayWrapper');
+    wrapper.style.display = 'block';
+    if (t === 'Intervention site' || t === 'Réunion') {
+        wrapper.className = 'collab-block'; document.getElementById('fullDayLabel').style.height = '34px'; document.getElementById('fullDayLabel').style.marginTop = '20px'; document.getElementById('timeRow').appendChild(wrapper);
+    } else if (t === 'Absence') {
+        wrapper.className = 'form-group'; document.getElementById('fullDayLabel').style.height = 'auto'; document.getElementById('fullDayLabel').style.marginTop = '10px'; document.getElementById('groupAbsence').parentNode.insertBefore(wrapper, document.getElementById('groupAbsence').nextSibling);
+    } else {
+        wrapper.className = 'form-group'; document.getElementById('fullDayLabel').style.height = 'auto'; document.getElementById('fullDayLabel').style.marginTop = '10px'; document.getElementById('groupContent').parentNode.insertBefore(wrapper, document.getElementById('groupContent').nextSibling);
+    }
+
+    const pV = document.querySelector('.palette-vivid'); pV.style.display = isBureau ? 'none' : 'grid'; 
+
+    const absVal = document.getElementById('absenceVal').value;
+    const hideAdminNote = (t === 'Absence' && (absVal === 'CP' || absVal === 'FÉRIÉ'));
+    document.getElementById('groupAdminNote').style.display = hideAdminNote ? 'none' : 'block';
+}
+
+function moveCollab(index, dir, e) { e.stopPropagation(); let list = getSortedCollabs(); const nIdx = index + dir; if (nIdx >= 0 && nIdx < list.length) { [list[index], list[nIdx]] = [list[nIdx], list[index]]; state.customOrder = list.map(c => c.code); localStorage.setItem('hru_order', JSON.stringify(state.customOrder)); openFavModal(); renderPlanning(); } }
+function addNewYear() { const lastYear = Math.max(...state.years); const nextYear = lastYear + 1; if (confirm(`Ajouter l'année ${nextYear} ?`)) { state.years.push(nextYear); syncAdmin(); } }
+function removeCurrentYear() { if (state.currentYear === 2026) return alert("Interdit."); if (confirm(`Supprimer ${state.currentYear} ?`)) { state.years = state.years.filter(y => y !== state.currentYear); state.currentYear = 2026; syncAdmin(); } }
+function renderYearTabs() { const container = document.getElementById('yearTabs'); container.innerHTML = ""; state.years.sort().forEach(y => { const tab = document.createElement('div'); tab.className = `year-tab ${y === state.currentYear ? 'active' : ''}`; tab.textContent = `ANNEE ${y}`; tab.onclick = () => { state.currentYear = y; loadTasksForYear(y); renderYearTabs(); }; container.appendChild(tab); }); }
+function exportData() { const blob = new Blob([JSON.stringify({ tasks: state.tasks, collabs: state.collabs, years: state.years, trash: state.trash }, null, 2)], { type: "application/json" }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `planning_global.json`; link.click(); }
+function openCollabModal() { document.getElementById('collabModal').classList.add('open'); }
+function saveCollab() { const pre = document.getElementById('newPre').value.trim(); const nom = document.getElementById('newNom').value.trim(); const tri = document.getElementById('newTri').value.trim().toUpperCase(); if(!pre || !tri) return alert("Données manquantes"); state.collabs.push({ code: tri, name: pre + " " + nom }); syncAdmin(); closeModal('collabModal'); }
+function openDeleteCollabModal() { const container = document.getElementById('collabDeleteList'); container.innerHTML = state.collabs.map(c => `<div class="collab-list-item"><span><b>${c.code}</b> — ${c.name}</span><button style="background:var(--red-light); color:var(--red); border:none; padding:5px; border-radius:4px; cursor:pointer;" onclick="deleteCollab('${c.code}')">✕</button></div>`).join(''); document.getElementById('deleteCollabModal').classList.add('open'); }
+function deleteCollab(code) { if (confirm(`Supprimer ${code} ?`)) { state.collabs = state.collabs.filter(c => c.code !== code); syncAdmin(); openDeleteCollabModal(); } }
+
+function handleInvert(targetId) { 
+    if (!draggedTaskId || String(draggedTaskId) === String(targetId)) return; 
+    saveHistory(); 
+    const s = state.tasks.find(t => String(t.id) === String(draggedTaskId));
+    const t = state.tasks.find(t => String(t.id) === String(targetId)); 
+    if (!s || !t) return; 
+    const tmp = { date: t.date, period: t.period, collab: t.collab, pos: t.position }; 
+    t.date = s.date; t.period = s.period; t.collab = s.collab; t.position = s.position; 
+    s.date = tmp.date; s.period = tmp.period; s.collab = tmp.collab; s.position = tmp.pos; 
+    syncTasks(); draggedTaskId = null; 
+    
+    let tmpS = document.createElement("DIV"); tmpS.innerHTML = s.content;
+    let tmpT = document.createElement("DIV"); tmpT.innerHTML = t.content;
+    logAction("Inversion de tâches", `${tmpS.textContent || tmpS.innerText} avec ${tmpT.textContent || tmpT.innerText}`);
+}
+
+function getLocalDateString(date) { let d = new Date(date); let m = '' + (d.getMonth() + 1); let dy = '' + d.getDate(); if (m.length < 2) m = '0' + m; if (dy.length < 2) dy = '0' + dy; return [d.getFullYear(), m, dy].join('-'); }
+
+</script>
+</body>
+</html>
