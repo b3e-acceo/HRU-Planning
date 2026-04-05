@@ -177,6 +177,9 @@
   
   #toastMsg { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #1a1a18; color: white; padding: 10px 25px; border-radius: 30px; font-weight: bold; font-family: 'Space Mono'; font-size: 11px; z-index: 9999; opacity: 0; pointer-events: none; transition: 0.3s; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
 
+  #alertSelectionBanner { position: fixed; top: 0; left: 0; right: 0; background: var(--orange); color: white; text-align: center; padding: 12px; z-index: 3000; font-weight: bold; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.3); font-size: 14px; }
+  #alertSelectionBanner button { background: white; color: var(--orange); border: none; padding: 4px 12px; border-radius: 4px; font-weight: bold; margin-left: 15px; cursor: pointer; }
+
   @media (max-width: 768px) {
     .topbar { flex-direction: column; padding: 12px 10px 0 10px; height: auto; gap: 10px; }
     .topbar-title { width: 100%; text-align: center; font-size: 14px; margin-bottom: 0; order: 1; }
@@ -208,7 +211,7 @@
 
   @media print {
     body { background: white !important; font-size: 10px; }
-    .topbar, .planning-toolbar, .zoom-container, #loginScreen, .modal-overlay, #toastMsg, #customTooltip { display: none !important; }
+    .topbar, .planning-toolbar, .zoom-container, #loginScreen, .modal-overlay, #toastMsg, #customTooltip, #alertSelectionBanner { display: none !important; }
     #app { display: block !important; height: auto !important; }
     .planning-scroll { overflow: visible !important; height: auto !important; }
     .planning-table { width: 100% !important; page-break-inside: auto; border: 1px solid #000; }
@@ -222,6 +225,7 @@
 
 <div id="toastMsg">Action effectuée</div>
 <div id="customTooltip"></div>
+<div id="alertSelectionBanner">Veuillez cliquer sur une tâche ou une case du planning... <button onclick="cancelAlertSelection()">Annuler</button></div>
 
 <div id="loginScreen">
   <div class="login-box">
@@ -291,9 +295,7 @@
         <button class="stats-btn" id="lockBtn" onclick="toggleLockPast()" style="display:none; background:var(--orange);">🔓 DÉVERROUILLÉ</button>
         
         <button class="fav-btn" onclick="openFavModal()">⭐ FAVORIS</button>
-        
         <button class="stats-btn" id="alertsBtn" onclick="openAlertsListModal()" style="display:none; background:#546e7a;">🚨 ALERTES</button>
-        
         <button class="stats-btn" id="accessBtn" onclick="openAccessModal()" style="display:none; background:var(--green-hru);">🔐 ACCÈS</button>
         <button class="stats-btn" id="historyBtn" onclick="openHistoryModal()" style="display:none; background:#8e44ad;">📜 HISTO</button>
         <button class="stats-btn" id="statsBtn" onclick="openStatsModal()">📊 STATS</button>
@@ -344,7 +346,10 @@
     <h3 style="margin-bottom:15px;">Signaler un problème ou une modification</h3>
     <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Votre demande sera notifiée aux Administrateurs et Éditeurs.</p>
     
-    <div style="margin-bottom:15px; padding:10px; background:var(--accent-light); border-left:4px solid var(--accent); border-radius:4px; font-size:11px; font-weight:bold; color:var(--text);" id="alertContextDisplay"></div>
+    <div style="margin-bottom:15px; padding:10px; background:var(--accent-light); border-left:4px solid var(--accent); border-radius:4px; font-size:11px; font-weight:bold; color:var(--text); display:flex; justify-content:space-between; align-items:center;">
+        <div id="alertContextDisplay"></div>
+        <button onclick="startAlertSelection()" style="background:var(--accent); color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;" title="Sélectionner sur le planning">📅 Choisir</button>
+    </div>
     <input type="hidden" id="alertContext">
 
     <div class="form-group">
@@ -522,6 +527,7 @@ let selectedBg = "#E8EEF5", selectedTextColor = "#1A4373", draggedTaskId = null,
 let taskHistory = []; 
 let redoHistory = []; 
 let tooltipTimeout = null, lastMouseE = null;
+let alertSelectionMode = false; // Mode pour cliquer sur le planning
 let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], alerts: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
 
 const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
@@ -544,12 +550,12 @@ function startAuthenticatedData() {
     db.ref('planning/config').on('value', s => { state.config = s.val() || {lockPast:false}; updateLockBtnUI(); });
     db.ref('planning/notes').on('value', s => { state.notes = s.val() || {}; renderPlanning(); });
     
-    // ECOUTE DES ALERTES
+    // Ecoute des alertes
     db.ref('planning/alerts').on('value', s => { 
         state.alerts = s.val() ? Object.values(s.val()) : []; 
         updateAlertsUI(); 
     });
-    
+
     loadTasksForYear(state.currentYear);
 }
 
@@ -623,7 +629,6 @@ function syncTasks() {
 function syncTrash() { db.ref('planning/trash').set(JSON.parse(JSON.stringify(state.trash))); }
 function syncAdmin() { db.ref('planning').update({ collabs: state.collabs, years: state.years, config: state.config }).catch(err => { alert("Seul l'Administrateur peut modifier la configuration !"); }); }
 
-// GESTION DES ALERTES
 function syncAlerts() {
     let alertsObj = {};
     state.alerts.forEach(a => alertsObj[a.id] = a);
@@ -633,7 +638,16 @@ function syncAlerts() {
 function updateAlertsUI() {
     const btn = document.getElementById('alertsBtn');
     if(!btn) return;
-    const pendingCount = state.alerts.filter(a => !a.resolved).length;
+    
+    const isPlanner = state.isAdmin || (state.user && state.user.isEditor);
+    let visibleAlerts = state.alerts;
+    
+    if (!isPlanner) {
+        const myCode = state.user ? state.user.code : '';
+        visibleAlerts = state.alerts.filter(a => a.author === myCode);
+    }
+    
+    const pendingCount = visibleAlerts.filter(a => !a.resolved).length;
     btn.innerHTML = `🚨 ALERTES ${pendingCount > 0 ? '('+pendingCount+')' : ''}`;
     
     if (pendingCount > 0) {
@@ -648,9 +662,16 @@ function updateAlertsUI() {
 function openAlertsListModal() {
     const list = document.getElementById('alertsListContainer');
     list.innerHTML = "";
-    const isPlanner = state.isAdmin || (state.user && state.user.isEditor);
     
-    const sortedAlerts = [...state.alerts].sort((a,b) => b.timestamp - a.timestamp);
+    const isPlanner = state.isAdmin || (state.user && state.user.isEditor);
+    let visibleAlerts = state.alerts;
+    
+    if (!isPlanner) {
+        const myCode = state.user ? state.user.code : '';
+        visibleAlerts = state.alerts.filter(a => a.author === myCode);
+    }
+    
+    const sortedAlerts = [...visibleAlerts].sort((a,b) => b.timestamp - a.timestamp);
     
     if(sortedAlerts.length === 0) {
         list.innerHTML = "<div style='text-align:center; padding:20px; color:gray'>Aucune alerte pour le moment.</div>";
@@ -666,11 +687,13 @@ function openAlertsListModal() {
             if(!a.resolved) {
                 btnHtml = `<button onclick="resolveAlert('${a.id}')" style="background:var(--green-hru); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer; font-weight:bold;">✔ Traiter</button>`;
             } else {
-                btnHtml = `<span style="font-size:10px; color:var(--green-hru); font-weight:bold;">✔ Traitée</span>
+                let resBy = a.resolvedBy || 'Admin';
+                btnHtml = `<span style="font-size:10px; color:var(--green-hru); font-weight:bold;">✔ Traitée par ${resBy}</span>
                            <button onclick="deleteAlert('${a.id}')" style="background:transparent; color:var(--red); border:1px solid var(--red); padding:2px 6px; border-radius:4px; font-size:10px; cursor:pointer; margin-left:5px;">🗑️</button>`;
             }
         } else {
-            btnHtml = a.resolved ? `<span style="font-size:10px; color:var(--green-hru); font-weight:bold;">✔ Traitée</span>` : `<span style="font-size:10px; color:var(--orange); font-weight:bold;">⏳ En attente</span>`;
+            let resBy = a.resolvedBy || 'Admin';
+            btnHtml = a.resolved ? `<span style="font-size:10px; color:var(--green-hru); font-weight:bold;">✔ Traitée par ${resBy}</span>` : `<span style="font-size:10px; color:var(--orange); font-weight:bold;">⏳ En attente</span>`;
         }
 
         list.innerHTML += `
@@ -695,6 +718,20 @@ function openAlertCreateModal(contextText = 'Remarque générale sur le planning
     document.getElementById('alertCreateModal').classList.add('open');
 }
 
+function startAlertSelection() {
+    closeModal('alertCreateModal');
+    closeModal('alertsListModal');
+    alertSelectionMode = true;
+    document.getElementById('alertSelectionBanner').style.display = 'block';
+}
+
+function cancelAlertSelection() {
+    alertSelectionMode = false;
+    document.getElementById('alertSelectionBanner').style.display = 'none';
+    const oldCtx = document.getElementById('alertContext').value || 'Remarque générale sur le planning';
+    openAlertCreateModal(oldCtx);
+}
+
 function sendAlert() {
     const msg = document.getElementById('alertMessage').value.trim();
     if(!msg) return alert("Veuillez expliquer votre problème.");
@@ -712,13 +749,14 @@ function sendAlert() {
     state.alerts.push(newAlert);
     syncAlerts();
     closeModal('alertCreateModal');
-    showToast("🚨 Alerte envoyée aux Admins !");
+    showToast("🚨 Alerte envoyée !");
 }
 
 function resolveAlert(id) {
     const alert = state.alerts.find(a => a.id === id);
     if(alert) {
         alert.resolved = true;
+        alert.resolvedBy = state.isAdmin ? "Admin" : (state.user ? state.user.code : "Inconnu");
         syncAlerts();
         openAlertsListModal();
         showToast("✔ Alerte marquée comme traitée");
@@ -732,7 +770,6 @@ function deleteAlert(id) {
         openAlertsListModal();
     }
 }
-
 
 function logAction(actionStr, details) {
     if(!state.isAdmin && (!state.user || !state.user.isEditor)) return;
@@ -797,6 +834,7 @@ window.addEventListener('keydown', (e) => {
     }
     if (e.key === "Escape") { 
         if (clipboardTask) cancelPasteMode();
+        if (alertSelectionMode) cancelAlertSelection();
         hideTooltip();
         closeModal('alertCreateModal'); closeModal('alertsListModal'); closeModal('exportModal'); closeModal('historyModal'); closeModal('accessModal'); closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); closeModal('trashModal'); closeModal('statsModal');
     } 
@@ -900,8 +938,6 @@ function doLogin() {
     
     const isEditor = state.user && state.user.isEditor;
     document.getElementById('exportBtn').style.display = 'block';
-    
-    // Le bouton alertes est visible pour tout le monde !
     document.getElementById('alertsBtn').style.display = 'block';
 
     if(state.isAdmin) { 
@@ -1201,6 +1237,11 @@ function renderPlanning() {
                 }
 
                 cell.onclick = (e) => { 
+                  if (alertSelectionMode) {
+                      e.stopPropagation(); alertSelectionMode = false; document.getElementById('alertSelectionBanner').style.display = 'none';
+                      openAlertCreateModal(`Période : ${dStr.split('-').reverse().join('/')} (${p}) pour ${c.code}`);
+                      return;
+                  }
                   if(canEdit && !isLocked) {
                     if(clipboardTask) { e.stopPropagation(); pasteTask(dStr, p, c.code); }
                     else { openModalTask({date:dStr, period:p, collab:c.code}); }
@@ -1250,6 +1291,12 @@ function renderPlanning() {
 
                     div.onclick = (e) => { 
                         e.stopPropagation(); clearTimeout(tooltipTimeout); hideTooltip();
+                        if (alertSelectionMode) {
+                            alertSelectionMode = false; document.getElementById('alertSelectionBanner').style.display = 'none';
+                            let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
+                            openAlertCreateModal(`Tâche "${tmp.textContent || tmp.innerText}" de ${task.collab} le ${task.date.split('-').reverse().join('/')}`);
+                            return;
+                        }
                         if (canEdit && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
                         else if (canEdit && !isLocked) openModalTask(task); 
                         else openConsultationTask(task); 
@@ -1536,7 +1583,6 @@ function openConsultationTask(task) {
     const hideConsultNote = (task.type === 'Absence' && (task.content === 'CP' || task.content === 'FÉRIÉ'));
     document.getElementById('consultNoteContainer').style.display = hideConsultNote ? 'none' : 'block';
 
-    // PRE-REMPLISSAGE DU BOUTON SIGNALER
     let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
     const taskTitleClean = tmp.textContent || tmp.innerText;
     document.getElementById('btnConsultAlert').onclick = () => {
@@ -1686,9 +1732,9 @@ function handleInvert(targetId) {
     if (!s || !t) return; 
     const tmp = { date: t.date, period: t.period, collab: t.collab, pos: t.position }; 
     t.date = s.date; t.period = s.period; t.collab = s.collab; t.position = s.position; 
-    s.date = tmp.date; s.period = tmp.period; s.collab = tmp.collab; s.position = tmp.pos;
-    syncTasks(); draggedTaskId = null;
-
+    s.date = tmp.date; s.period = tmp.period; s.collab = tmp.collab; s.position = tmp.pos; 
+    syncTasks(); draggedTaskId = null; 
+    
     let tmpS = document.createElement("DIV"); tmpS.innerHTML = s.content;
     let tmpT = document.createElement("DIV"); tmpT.innerHTML = t.content;
     logAction("Inversion de tâches", `${tmpS.textContent || tmpS.innerText} avec ${tmpT.textContent || tmpT.innerText}`);
