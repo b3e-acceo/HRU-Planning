@@ -60,9 +60,9 @@
   .zoom-label { font-size: 10px; font-weight: 800; color: var(--accent); font-family: 'Space Mono'; }
 
   .search-container { margin-left: auto; display: flex; align-items: center; gap: 10px; }
-  .search-input { padding: 8px 12px; border-radius: 20px; border: 1px solid var(--border); font-family: 'DM Sans'; font-size: 12px; outline: none; background: var(--surface2); color: var(--text); width: 200px; transition: 0.2s; }
+  .search-input { padding: 8px 50px 8px 12px; border-radius: 20px; border: 1px solid var(--border); font-family: 'DM Sans'; font-size: 12px; outline: none; background: var(--surface2); color: var(--text); width: 200px; transition: 0.2s; }
   .search-input:focus { border-color: var(--accent); width: 250px; }
-  .date-picker { width: 130px; cursor: pointer; }
+  .date-picker { width: 130px; cursor: pointer; padding-right: 12px; }
   .date-picker:focus { width: 140px; }
   .filter-select { padding: 6px 12px; border-radius: 20px; border: 1px solid var(--border); font-family: 'DM Sans'; font-size: 11px; font-weight: bold; outline: none; background: var(--surface2); color: var(--text); cursor: pointer;}
 
@@ -310,7 +310,16 @@
                 <option value="reunion">🤝 RÉUNIONS</option>
                 <option value="abs">🏖️ ABSENCES SEULES</option>
             </select>
-            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche (Entrée)" onkeyup="handleSearch(event)">
+            <div style="position:relative; display:flex; align-items:center;">
+                <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche (Entrée)" onkeyup="handleSearch(event)">
+                <div id="searchNav" style="display:none; position:absolute; right:10px; align-items:center; gap:5px;">
+                    <span id="searchCount" style="font-size:10px; color:var(--accent); font-weight:bold;"></span>
+                    <div style="display:flex; flex-direction:column; gap:2px;">
+                        <button onclick="navigateSearch(-1)" style="border:none;background:none;cursor:pointer;font-size:9px;line-height:1;padding:0;color:var(--text-muted)">▲</button>
+                        <button onclick="navigateSearch(1)" style="border:none;background:none;cursor:pointer;font-size:9px;line-height:1;padding:0;color:var(--text-muted)">▼</button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <button class="new-btn" id="newCollabBtn" onclick="openCollabModal()" style="margin-left: 10px;">➕ EQUIPE</button>
@@ -528,6 +537,11 @@ let taskHistory = [];
 let redoHistory = []; 
 let tooltipTimeout = null, lastMouseE = null;
 let alertSelectionMode = false; 
+
+// VARIABLES GESTION RECHERCHE
+let currentSearchIndex = -1;
+let lastSearchTerm = "";
+
 let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], alerts: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
 
 const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
@@ -550,6 +564,7 @@ function startAuthenticatedData() {
     db.ref('planning/config').on('value', s => { state.config = s.val() || {lockPast:false}; updateLockBtnUI(); });
     db.ref('planning/notes').on('value', s => { state.notes = s.val() || {}; renderPlanning(); });
     
+    // Ecoute des alertes
     db.ref('planning/alerts').on('value', s => { 
         state.alerts = s.val() ? Object.values(s.val()) : []; 
         updateAlertsUI(); 
@@ -803,21 +818,57 @@ function showToast(msg) { const t = document.getElementById('toastMsg'); t.textC
 function toggleDarkMode() { document.body.classList.toggle('dark-mode'); localStorage.setItem('hru_darkmode', document.body.classList.contains('dark-mode')); }
 if(localStorage.getItem('hru_darkmode') === 'true') document.body.classList.add('dark-mode');
 
+// GESTION RECHERCHE INTELLIGENTE
 function handleSearch(e) {
-    renderPlanning(); 
-    if (e.key === 'Enter') {
-        const term = document.getElementById('searchInput').value.trim();
-        if (!term) return;
-        const matches = document.querySelectorAll('.cell-tasks-container > div:not(.dimmed)');
-        if (matches.length > 0) {
-            const firstMatch = matches[0];
-            firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-            const oldShadow = firstMatch.style.boxShadow;
-            firstMatch.style.boxShadow = '0 0 0 3px var(--accent), 0 0 15px var(--accent)';
-            setTimeout(() => { firstMatch.style.boxShadow = oldShadow; }, 2000);
-        } else {
-            showToast("Aucun résultat trouvé");
+    const term = document.getElementById('searchInput').value.trim().toLowerCase();
+    
+    if (e.key !== 'Enter' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
+        if (term !== lastSearchTerm) {
+            lastSearchTerm = term;
+            currentSearchIndex = -1;
+            renderPlanning();
         }
+        return;
+    }
+
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        navigateSearch(e.shiftKey ? -1 : 1);
+    }
+}
+
+function navigateSearch(dir) {
+    const term = document.getElementById('searchInput').value.trim();
+    if(!term) return;
+
+    const matches = document.querySelectorAll('.cell-tasks-container > div:not(.dimmed)');
+    if (matches.length === 0) {
+        showToast("Aucun résultat trouvé");
+        return;
+    }
+
+    currentSearchIndex += dir;
+    if (currentSearchIndex >= matches.length) currentSearchIndex = 0;
+    if (currentSearchIndex < 0) currentSearchIndex = matches.length - 1;
+
+    const target = matches[currentSearchIndex];
+    target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    
+    const oldShadow = target.style.boxShadow;
+    target.style.boxShadow = '0 0 0 3px var(--accent), 0 0 15px var(--accent)';
+    setTimeout(() => { target.style.boxShadow = oldShadow; }, 2000);
+    
+    updateSearchNavUI(matches.length);
+}
+
+function updateSearchNavUI(total) {
+    const nav = document.getElementById('searchNav');
+    const count = document.getElementById('searchCount');
+    if (total > 0 && lastSearchTerm !== "") {
+        nav.style.display = 'flex';
+        count.textContent = (currentSearchIndex === -1 ? 0 : currentSearchIndex + 1) + '/' + total;
+    } else {
+        nav.style.display = 'none';
     }
 }
 
@@ -1312,6 +1363,14 @@ function renderPlanning() {
             if (!isW && pIndex === 1) row.previousElementSibling.querySelector('.col-date').classList.add('col-date-end');
         });
     }
+  }
+
+  // --- MISE A JOUR DU COMPTEUR DE RECHERCHE A LA FIN DU RENDU ---
+  if (searchTerm) {
+      const matches = document.querySelectorAll('.cell-tasks-container > div:not(.dimmed)');
+      updateSearchNavUI(matches.length);
+  } else {
+      document.getElementById('searchNav').style.display = 'none';
   }
 }
 
