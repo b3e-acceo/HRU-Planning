@@ -123,7 +123,6 @@
   .task-location { font-size: 9px; opacity: 0.8; font-weight: normal; margin-top: 2px; font-style: italic; }
   .task-time-inline { font-size: 9px; font-weight: bold; margin-top: 2px; opacity: 0.9; }
 
-  /* INFO-BULLE SUR MESURE */
   #customTooltip { position: fixed; z-index: 9999; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow-lg); padding: 12px; border-radius: 8px; font-size: 11px; max-width: 280px; pointer-events: none; display: none; line-height: 1.4; transition: opacity 0.1s; }
   body.dark-mode #customTooltip { background: var(--surface2); border-color: var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
 
@@ -150,7 +149,6 @@
   .form-input { width: 100%; padding: 7px 10px; border: 1px solid var(--border); border-radius: 4px; font-family: inherit; font-size: 12px; }
   .btn-group { display: flex; justify-content: space-between; gap: 8px; margin-top: 15px; }
 
-  /* TOOLBAR RICH TEXT */
   .rt-btn { width:22px; height:22px; display:flex; align-items:center; justify-content:center; border:1px solid var(--border); border-radius:4px; background:var(--surface2); cursor:pointer; font-family:serif; font-size:12px; color:var(--text); transition:0.2s; }
   .rt-btn:hover { background:var(--border); }
   .rt-color { width:14px; height:14px; border-radius:50%; border:1px solid rgba(0,0,0,0.2); cursor:pointer; display:inline-block; transition:transform 0.1s;}
@@ -293,6 +291,9 @@
         <button class="stats-btn" id="lockBtn" onclick="toggleLockPast()" style="display:none; background:var(--orange);">🔓 DÉVERROUILLÉ</button>
         
         <button class="fav-btn" onclick="openFavModal()">⭐ FAVORIS</button>
+        
+        <button class="stats-btn" id="alertsBtn" onclick="openAlertsListModal()" style="display:none; background:#546e7a;">🚨 ALERTES</button>
+        
         <button class="stats-btn" id="accessBtn" onclick="openAccessModal()" style="display:none; background:var(--green-hru);">🔐 ACCÈS</button>
         <button class="stats-btn" id="historyBtn" onclick="openHistoryModal()" style="display:none; background:#8e44ad;">📜 HISTO</button>
         <button class="stats-btn" id="statsBtn" onclick="openStatsModal()">📊 STATS</button>
@@ -307,7 +308,7 @@
                 <option value="reunion">🤝 RÉUNIONS</option>
                 <option value="abs">🏖️ ABSENCES SEULES</option>
             </select>
-            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche..." onkeyup="handleSearch(event)">
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche (Entrée)" onkeyup="handleSearch(event)">
         </div>
 
         <button class="new-btn" id="newCollabBtn" onclick="openCollabModal()" style="margin-left: 10px;">➕ EQUIPE</button>
@@ -324,25 +325,47 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="alertsListModal">
+  <div class="modal" style="width: 600px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+        <h3 style="margin:0;">🚨 Gestion des Alertes</h3>
+        <button onclick="openAlertCreateModal('Remarque générale')" style="background:var(--red); color:white; border:none; padding:6px 12px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:11px;">+ NOUVELLE ALERTE</button>
+    </div>
+    <div id="alertsListContainer" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; padding:5px;">
+        </div>
+    <div class="btn-group">
+        <button onclick="closeModal('alertsListModal')" style="width:100%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--surface2); color:var(--text);">FERMER</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="alertCreateModal">
+  <div class="modal" style="width: 500px;">
+    <h3 style="margin-bottom:15px;">Signaler un problème ou une modification</h3>
+    <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 10px;">Votre demande sera notifiée aux Administrateurs et Éditeurs.</p>
+    
+    <div style="margin-bottom:15px; padding:10px; background:var(--accent-light); border-left:4px solid var(--accent); border-radius:4px; font-size:11px; font-weight:bold; color:var(--text);" id="alertContextDisplay"></div>
+    <input type="hidden" id="alertContext">
+
+    <div class="form-group">
+        <label class="form-label">Votre message</label>
+        <textarea id="alertMessage" class="form-input" rows="4" placeholder="Expliquez brièvement le problème (ex: L'intervention a été décalée au lendemain...)"></textarea>
+    </div>
+    
+    <div class="btn-group">
+        <button onclick="closeModal('alertCreateModal')" style="border:none; background:none; color:var(--text); cursor:pointer;">Annuler</button>
+        <button onclick="sendAlert()" style="background:var(--red); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer; font-weight:bold;">Envoyer l'alerte</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="exportModal">
   <div class="modal">
     <h3>Exporter vers mon Agenda</h3>
     <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Sélectionnez une date. La semaine complète correspondante sera téléchargée au format .ics (compatible Google Agenda, Outlook, Apple).</p>
-    
-    <div class="form-group" id="exportCollabGroup" style="display:none;">
-        <label class="form-label">Agenda du collaborateur :</label>
-        <select id="exportCollab" class="form-input"></select>
-    </div>
-
-    <div class="form-group">
-        <label class="form-label">Date (pour identifier la semaine) :</label>
-        <input type="date" id="exportDate" class="form-input">
-    </div>
-    
-    <div class="btn-group">
-        <button onclick="closeModal('exportModal')" style="border:none; background:none; color:var(--text); cursor:pointer; width:auto; padding:8px 15px;">Annuler</button>
-        <button onclick="downloadICS()" style="background:var(--accent); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer;">Télécharger .ics</button>
-    </div>
+    <div class="form-group" id="exportCollabGroup" style="display:none;"><label class="form-label">Agenda du collaborateur :</label><select id="exportCollab" class="form-input"></select></div>
+    <div class="form-group"><label class="form-label">Date (pour identifier la semaine) :</label><input type="date" id="exportDate" class="form-input"></div>
+    <div class="btn-group"><button onclick="closeModal('exportModal')" style="border:none; background:none; color:var(--text); cursor:pointer; width:auto; padding:8px 15px;">Annuler</button><button onclick="downloadICS()" style="background:var(--accent); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer;">Télécharger .ics</button></div>
   </div>
 </div>
 
@@ -350,9 +373,7 @@
   <div class="modal" style="width:600px;">
     <h3>Historique d'activité (100 dernières actions)</h3>
     <div id="historyList" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; font-size:11px; padding:10px; line-height:1.5;"></div>
-    <div class="btn-group">
-        <button onclick="closeModal('historyModal')" style="width:100%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button>
-    </div>
+    <div class="btn-group"><button onclick="closeModal('historyModal')" style="width:100%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button></div>
   </div>
 </div>
 
@@ -361,10 +382,7 @@
     <h3>Gérer les droits d'édition</h3>
     <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Cochez les collaborateurs autorisés à modifier le planning.</p>
     <div id="accessList" style="max-height:300px; overflow-y:auto; border:1px solid var(--border); border-radius:4px; padding: 10px;"></div>
-    <div class="btn-group">
-        <button onclick="closeModal('accessModal')" style="border:none; background:none; color:var(--text); cursor:pointer;">Annuler</button>
-        <button onclick="saveAccess()" style="background:var(--accent); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer;">Enregistrer</button>
-    </div>
+    <div class="btn-group"><button onclick="closeModal('accessModal')" style="border:none; background:none; color:var(--text); cursor:pointer;">Annuler</button><button onclick="saveAccess()" style="background:var(--accent); color:white; border:none; padding:8px 20px; border-radius:4px; cursor:pointer;">Enregistrer</button></div>
   </div>
 </div>
 
@@ -376,10 +394,7 @@
   <div class="modal">
     <h3 style="margin-bottom:10px;">Corbeille (48h)</h3>
     <div id="trashList" style="max-height:400px; overflow-y:auto; border:1px solid var(--border); border-radius:4px;"></div>
-    <div class="btn-group">
-        <button onclick="emptyTrash()" style="width:48%; background:#fceae8; color:var(--red); border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700;">VIDER</button>
-        <button onclick="closeModal('trashModal')" style="width:48%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button>
-    </div>
+    <div class="btn-group"><button onclick="emptyTrash()" style="width:48%; background:#fceae8; color:var(--red); border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700;">VIDER</button><button onclick="closeModal('trashModal')" style="width:48%; border:none; padding:10px; border-radius:6px; cursor:pointer; font-weight:700; background:var(--accent); color:white;">FERMER</button></div>
   </div>
 </div>
 
@@ -394,9 +409,10 @@
         <input type="hidden" id="consultNoteTaskId">
     </div>
 
-    <div class="btn-group">
-        <button onclick="closeModal('viewModal')" style="width:48%; border:none; border-radius:6px; cursor:pointer; font-weight:700; padding:10px; background:var(--surface2); color:var(--text);">FERMER</button>
-        <button onclick="saveNote()" style="width:48%; border:none; border-radius:6px; cursor:pointer; font-weight:700; padding:10px; background:var(--green-hru); color:white;">💾 SAUVER NOTE</button>
+    <div class="btn-group" style="flex-wrap: wrap;">
+        <button id="btnConsultAlert" style="background:#fceae8; color:var(--red); border:none; padding:10px; border-radius:6px; font-weight:700; cursor:pointer; flex: 1; min-width: 100px;">🚨 SIGNALER</button>
+        <button onclick="closeModal('viewModal')" style="background:var(--surface2); color:var(--text); border:none; padding:10px; border-radius:6px; font-weight:700; cursor:pointer; flex: 1; min-width: 100px;">FERMER</button>
+        <button onclick="saveNote()" style="background:var(--green-hru); color:white; border:none; padding:10px; border-radius:6px; font-weight:700; cursor:pointer; flex: 1; min-width: 100px;">💾 SAUVER NOTE</button>
     </div>
   </div>
 </div>
@@ -506,7 +522,7 @@ let selectedBg = "#E8EEF5", selectedTextColor = "#1A4373", draggedTaskId = null,
 let taskHistory = []; 
 let redoHistory = []; 
 let tooltipTimeout = null, lastMouseE = null;
-let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
+let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], alerts: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
 
 const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
 
@@ -527,6 +543,12 @@ function startAuthenticatedData() {
     db.ref('planning/trash').on('value', s => { state.trash = s.val() ? Object.values(s.val()) : []; });
     db.ref('planning/config').on('value', s => { state.config = s.val() || {lockPast:false}; updateLockBtnUI(); });
     db.ref('planning/notes').on('value', s => { state.notes = s.val() || {}; renderPlanning(); });
+    
+    // ECOUTE DES ALERTES
+    db.ref('planning/alerts').on('value', s => { 
+        state.alerts = s.val() ? Object.values(s.val()) : []; 
+        updateAlertsUI(); 
+    });
     
     loadTasksForYear(state.currentYear);
 }
@@ -601,6 +623,117 @@ function syncTasks() {
 function syncTrash() { db.ref('planning/trash').set(JSON.parse(JSON.stringify(state.trash))); }
 function syncAdmin() { db.ref('planning').update({ collabs: state.collabs, years: state.years, config: state.config }).catch(err => { alert("Seul l'Administrateur peut modifier la configuration !"); }); }
 
+// GESTION DES ALERTES
+function syncAlerts() {
+    let alertsObj = {};
+    state.alerts.forEach(a => alertsObj[a.id] = a);
+    db.ref('planning/alerts').set(alertsObj);
+}
+
+function updateAlertsUI() {
+    const btn = document.getElementById('alertsBtn');
+    if(!btn) return;
+    const pendingCount = state.alerts.filter(a => !a.resolved).length;
+    btn.innerHTML = `🚨 ALERTES ${pendingCount > 0 ? '('+pendingCount+')' : ''}`;
+    
+    if (pendingCount > 0) {
+        btn.style.background = 'var(--red)';
+        btn.style.boxShadow = '0 0 10px rgba(192, 57, 43, 0.8)';
+    } else {
+        btn.style.background = '#546e7a';
+        btn.style.boxShadow = 'none';
+    }
+}
+
+function openAlertsListModal() {
+    const list = document.getElementById('alertsListContainer');
+    list.innerHTML = "";
+    const isPlanner = state.isAdmin || (state.user && state.user.isEditor);
+    
+    const sortedAlerts = [...state.alerts].sort((a,b) => b.timestamp - a.timestamp);
+    
+    if(sortedAlerts.length === 0) {
+        list.innerHTML = "<div style='text-align:center; padding:20px; color:gray'>Aucune alerte pour le moment.</div>";
+    }
+    
+    sortedAlerts.forEach(a => {
+        const d = new Date(a.timestamp).toLocaleString('fr-FR');
+        const bg = a.resolved ? 'var(--surface2)' : '#fff3cd';
+        const opacity = a.resolved ? '0.6' : '1';
+        
+        let btnHtml = '';
+        if(isPlanner) {
+            if(!a.resolved) {
+                btnHtml = `<button onclick="resolveAlert('${a.id}')" style="background:var(--green-hru); color:white; border:none; padding:4px 8px; border-radius:4px; font-size:10px; cursor:pointer; font-weight:bold;">✔ Traiter</button>`;
+            } else {
+                btnHtml = `<span style="font-size:10px; color:var(--green-hru); font-weight:bold;">✔ Traitée</span>
+                           <button onclick="deleteAlert('${a.id}')" style="background:transparent; color:var(--red); border:1px solid var(--red); padding:2px 6px; border-radius:4px; font-size:10px; cursor:pointer; margin-left:5px;">🗑️</button>`;
+            }
+        } else {
+            btnHtml = a.resolved ? `<span style="font-size:10px; color:var(--green-hru); font-weight:bold;">✔ Traitée</span>` : `<span style="font-size:10px; color:var(--orange); font-weight:bold;">⏳ En attente</span>`;
+        }
+
+        list.innerHTML += `
+            <div style="background:${bg}; opacity:${opacity}; padding:10px; border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                    <b style="font-size:11px; color:var(--accent)">De: ${a.author} <span style="color:gray; font-weight:normal;">(${d})</span></b>
+                    <div>${btnHtml}</div>
+                </div>
+                <div style="font-size:10px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">Concerne : ${a.context}</div>
+                <div style="font-size:12px;">${a.message}</div>
+            </div>
+        `;
+    });
+    
+    document.getElementById('alertsListModal').classList.add('open');
+}
+
+function openAlertCreateModal(contextText = 'Remarque générale sur le planning') {
+    document.getElementById('alertContext').value = contextText;
+    document.getElementById('alertContextDisplay').textContent = "Concerne : " + contextText;
+    document.getElementById('alertMessage').value = '';
+    document.getElementById('alertCreateModal').classList.add('open');
+}
+
+function sendAlert() {
+    const msg = document.getElementById('alertMessage').value.trim();
+    if(!msg) return alert("Veuillez expliquer votre problème.");
+    
+    const ctx = document.getElementById('alertContext').value;
+    const newAlert = {
+        id: Date.now().toString(),
+        author: state.user ? state.user.code : 'Inconnu',
+        context: ctx,
+        message: msg,
+        timestamp: Date.now(),
+        resolved: false
+    };
+    
+    state.alerts.push(newAlert);
+    syncAlerts();
+    closeModal('alertCreateModal');
+    showToast("🚨 Alerte envoyée aux Admins !");
+}
+
+function resolveAlert(id) {
+    const alert = state.alerts.find(a => a.id === id);
+    if(alert) {
+        alert.resolved = true;
+        syncAlerts();
+        openAlertsListModal();
+        showToast("✔ Alerte marquée comme traitée");
+    }
+}
+
+function deleteAlert(id) {
+    if(confirm("Supprimer définitivement cet historique d'alerte ?")) {
+        state.alerts = state.alerts.filter(a => a.id !== id);
+        syncAlerts();
+        openAlertsListModal();
+    }
+}
+
+
 function logAction(actionStr, details) {
     if(!state.isAdmin && (!state.user || !state.user.isEditor)) return;
     const author = state.user ? state.user.code : 'Admin';
@@ -634,24 +767,15 @@ function showToast(msg) { const t = document.getElementById('toastMsg'); t.textC
 function toggleDarkMode() { document.body.classList.toggle('dark-mode'); localStorage.setItem('hru_darkmode', document.body.classList.contains('dark-mode')); }
 if(localStorage.getItem('hru_darkmode') === 'true') document.body.classList.add('dark-mode');
 
-// GESTION RECHERCHE INTELLIGENTE
 function handleSearch(e) {
-    renderPlanning(); // On garde le filtrage en temps réel
-
+    renderPlanning(); 
     if (e.key === 'Enter') {
         const term = document.getElementById('searchInput').value.trim();
         if (!term) return;
-
-        // Cherche le premier élément qui n'a pas la classe 'dimmed'
         const matches = document.querySelectorAll('.cell-tasks-container > div:not(.dimmed)');
-        
         if (matches.length > 0) {
             const firstMatch = matches[0];
-            
-            // Fait défiler le conteneur jusqu'à l'élément
             firstMatch.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-            
-            // Petit effet visuel (clignotement) pour bien le voir
             const oldShadow = firstMatch.style.boxShadow;
             firstMatch.style.boxShadow = '0 0 0 3px var(--accent), 0 0 15px var(--accent)';
             setTimeout(() => { firstMatch.style.boxShadow = oldShadow; }, 2000);
@@ -674,7 +798,7 @@ window.addEventListener('keydown', (e) => {
     if (e.key === "Escape") { 
         if (clipboardTask) cancelPasteMode();
         hideTooltip();
-        closeModal('exportModal'); closeModal('historyModal'); closeModal('accessModal'); closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); closeModal('trashModal'); closeModal('statsModal');
+        closeModal('alertCreateModal'); closeModal('alertsListModal'); closeModal('exportModal'); closeModal('historyModal'); closeModal('accessModal'); closeModal('favModal'); closeModal('collabModal'); closeModal('deleteCollabModal'); closeModal('taskModal'); closeModal('viewModal'); closeModal('trashModal'); closeModal('statsModal');
     } 
     if ((e.key === "Delete" || e.key === "Del") && document.getElementById('taskModal').classList.contains('open') && document.getElementById('editTaskId').value) { 
         if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA' || document.activeElement.isContentEditable) return; 
@@ -776,6 +900,9 @@ function doLogin() {
     
     const isEditor = state.user && state.user.isEditor;
     document.getElementById('exportBtn').style.display = 'block';
+    
+    // Le bouton alertes est visible pour tout le monde !
+    document.getElementById('alertsBtn').style.display = 'block';
 
     if(state.isAdmin) { 
         document.getElementById('userInfo').textContent = `🔧 Mode Admin (${state.user.name})`; 
@@ -1409,6 +1536,14 @@ function openConsultationTask(task) {
     const hideConsultNote = (task.type === 'Absence' && (task.content === 'CP' || task.content === 'FÉRIÉ'));
     document.getElementById('consultNoteContainer').style.display = hideConsultNote ? 'none' : 'block';
 
+    // PRE-REMPLISSAGE DU BOUTON SIGNALER
+    let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
+    const taskTitleClean = tmp.textContent || tmp.innerText;
+    document.getElementById('btnConsultAlert').onclick = () => {
+        closeModal('viewModal');
+        openAlertCreateModal(`Tâche "${taskTitleClean}" de ${task.collab} le ${task.date.split('-').reverse().join('/')}`);
+    };
+
     document.getElementById('viewModal').classList.add('open'); 
 }
 
@@ -1551,9 +1686,9 @@ function handleInvert(targetId) {
     if (!s || !t) return; 
     const tmp = { date: t.date, period: t.period, collab: t.collab, pos: t.position }; 
     t.date = s.date; t.period = s.period; t.collab = s.collab; t.position = s.position; 
-    s.date = tmp.date; s.period = tmp.period; s.collab = tmp.collab; s.position = tmp.pos; 
-    syncTasks(); draggedTaskId = null; 
-    
+    s.date = tmp.date; s.period = tmp.period; s.collab = tmp.collab; s.position = tmp.pos;
+    syncTasks(); draggedTaskId = null;
+
     let tmpS = document.createElement("DIV"); tmpS.innerHTML = s.content;
     let tmpT = document.createElement("DIV"); tmpT.innerHTML = t.content;
     logAction("Inversion de tâches", `${tmpS.textContent || tmpS.innerText} avec ${tmpT.textContent || tmpT.innerText}`);
