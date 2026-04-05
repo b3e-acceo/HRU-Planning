@@ -292,7 +292,7 @@
             <span class="zoom-label">GLOBAL</span>
         </div>
         
-        <button class="stats-btn" id="lockBtn" onclick="toggleLockPast()" style="display:none; background:var(--orange);">🔓 DÉVERROUILLÉ</button>
+        <button class="stats-btn" id="lockBtn" onclick="toggleLockPast()" style="display:none; background:var(--orange);">🔓 DEVERR.</button>
         
         <button class="fav-btn" onclick="openFavModal()">⭐ FAVORIS</button>
         <button class="stats-btn" id="alertsBtn" onclick="openAlertsListModal()" style="display:none; background:#546e7a;">🚨 ALERTES</button>
@@ -315,7 +315,7 @@
 
         <button class="new-btn" id="newCollabBtn" onclick="openCollabModal()" style="margin-left: 10px;">➕ EQUIPE</button>
         <button class="del-btn" id="delCollabBtn" onclick="openDeleteCollabModal()">❌ SUPP.</button>
-        <button class="trash-btn" id="trashBtn" onclick="openTrashModal()">🗑️ CORBEILLE</button>
+        <button class="trash-btn" id="trashBtn" onclick="openTrashModal()">🗑️ CORB.</button>
     </div>
   </div>
 
@@ -527,7 +527,7 @@ let selectedBg = "#E8EEF5", selectedTextColor = "#1A4373", draggedTaskId = null,
 let taskHistory = []; 
 let redoHistory = []; 
 let tooltipTimeout = null, lastMouseE = null;
-let alertSelectionMode = false; // Mode pour cliquer sur le planning
+let alertSelectionMode = false; 
 let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], alerts: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
 
 const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
@@ -550,7 +550,6 @@ function startAuthenticatedData() {
     db.ref('planning/config').on('value', s => { state.config = s.val() || {lockPast:false}; updateLockBtnUI(); });
     db.ref('planning/notes').on('value', s => { state.notes = s.val() || {}; renderPlanning(); });
     
-    // Ecoute des alertes
     db.ref('planning/alerts').on('value', s => { 
         state.alerts = s.val() ? Object.values(s.val()) : []; 
         updateAlertsUI(); 
@@ -1011,8 +1010,8 @@ function toggleLockPast() {
 function updateLockBtnUI() {
     const btn = document.getElementById('lockBtn');
     if(!btn) return;
-    if(state.config && state.config.lockPast) { btn.innerHTML = "🔒 VERROUILLÉ"; btn.style.background = "#546e7a"; } 
-    else { btn.innerHTML = "🔓 DÉVERROUILLÉ"; btn.style.background = "var(--orange)"; }
+    if(state.config && state.config.lockPast) { btn.innerHTML = "🔒 VERR."; btn.style.background = "#546e7a"; } 
+    else { btn.innerHTML = "🔓 DEVERR."; btn.style.background = "var(--orange)"; }
 }
 
 function getSortedCollabs() { let list = [...state.collabs]; if (state.customOrder) { list.sort((a, b) => state.customOrder.indexOf(a.code) - state.customOrder.indexOf(b.code)); } if (state.favCollab) { const fav = list.find(c => c.code === state.favCollab); if (fav) list = [fav, ...list.filter(c => c.code !== state.favCollab)]; } return list; }
