@@ -123,8 +123,12 @@
   .task-location { font-size: 9px; opacity: 0.8; font-weight: normal; margin-top: 2px; font-style: italic; }
   .task-time-inline { font-size: 9px; font-weight: bold; margin-top: 2px; opacity: 0.9; }
 
+  /* INFO-BULLE SUR MESURE */
   #customTooltip { position: fixed; z-index: 9999; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow-lg); padding: 12px; border-radius: 8px; font-size: 11px; max-width: 280px; pointer-events: none; display: none; line-height: 1.4; transition: opacity 0.1s; }
   body.dark-mode #customTooltip { background: var(--surface2); border-color: var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+
+  /* BADGE TELETRAVAIL */
+  .type-teletravail { font-weight: 800 !important; background: #e3f2fd !important; color: #0277bd !important; border: 1px dashed #0277bd !important; border-left: 4px solid #0277bd !important; text-align: center; justify-content: center; padding: 2px !important; min-height: 20px !important; }
 
   .type-intervention { font-weight: 800 !important; }
   .type-reunion { font-weight: 800 !important; background: var(--yellow-livrable) !important; color: #000000 !important; border-left-color: #000000 !important; }
@@ -304,6 +308,7 @@
             <select id="viewFilter" onchange="renderPlanning()" class="filter-select" style="display:none;">
                 <option value="all">👀 TOUT VOIR</option>
                 <option value="prod">⚙️ PROD. SEULE (SANS ABS.)</option>
+                <option value="teletravail">🏠 TÉLÉTRAVAIL SEUL</option>
                 <option value="site">🚗 INTERVENTIONS SITE</option>
                 <option value="bureau">💻 RÉALISATION BUREAU</option>
                 <option value="livrables">📦 LIVRABLES & AO</option>
@@ -459,7 +464,7 @@
         <div class="collab-block" id="binomeSection"><label class="form-label">Binôme</label><div id="binomeDisplay"><button id="addBinomeBtn" class="add-binome-btn" onclick="showBinomeSelect()">➕ AJOUT BINÔME</button><select id="taskBinome" class="form-input" style="display:none" onchange="handleBinomeChange()"></select></div></div>
     </div>
     
-    <div class="form-group"><label class="form-label">Type</label><select id="taskType" class="form-input" onchange="toggleType()"><option value="Intervention site">Intervention site</option><option value="Réalisation bureau">Réalisation bureau</option><option value="Réunion">Réunion</option><option value="Envoi livrables">Envoi livrables</option><option value="Envoi AO">Envoi AO</option><option value="Absence">Absence</option></select></div>
+    <div class="form-group"><label class="form-label">Type</label><select id="taskType" class="form-input" onchange="toggleType()"><option value="Intervention site">Intervention site</option><option value="Réalisation bureau">Réalisation bureau</option><option value="Télétravail">Télétravail</option><option value="Réunion">Réunion</option><option value="Envoi livrables">Envoi livrables</option><option value="Envoi AO">Envoi AO</option><option value="Absence">Absence</option></select></div>
     
     <div class="form-group" id="groupColors"><label class="form-label">Couleur</label><div class="color-picker"><div class="palette-light"><div class="color-option" style="background:#E8EEF5" data-bg="#E8EEF5" data-text="#1A4373" onclick="selectColor(this)"></div><div class="color-option" style="background:#E6F3EE" data-bg="#E6F3EE" data-text="#1B5E44" onclick="selectColor(this)"></div><div class="color-option" style="background:#FDF3E3" data-bg="#FDF3E3" data-text="#8E5611" onclick="selectColor(this)"></div><div class="color-option" style="background:#FCEAE8" data-bg="#FCEAE8" data-text="#96281B" onclick="selectColor(this)"></div><div class="color-option" style="background:#F0EAF8" data-bg="#F0EAF8" data-text="#4D347A" onclick="selectColor(this)"></div><div class="color-option" style="background:#E0F7FA" data-bg="#E0F7FA" data-text="#006064" onclick="selectColor(this)"></div><div class="color-option" style="background:#D7CCC8" data-bg="#D7CCC8" data-text="#4E342E" onclick="selectColor(this)"></div></div><div class="palette-vivid"><div class="color-option" style="background:#1A4373" data-bg="#1A4373" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#2E7D5E" data-bg="#2E7D5E" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#C47A1A" data-bg="#C47A1A" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#C0392B" data-bg="#C0392B" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#6A1B9A" data-bg="#6A1B9A" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#00838F" data-bg="#00838F" data-text="#FFFFFF" onclick="selectColor(this)"></div><div class="color-option" style="background:#37474F" data-bg="#37474F" data-text="#FFFFFF" onclick="selectColor(this)"></div></div></div></div>
     
@@ -624,6 +629,12 @@ firebase.auth().onAuthStateChanged((user) => {
         if(errDiv) errDiv.style.display = 'none';
     }
 });
+
+function checkAutoLogin() {
+    if(dataLoaded && (state.isAdmin || state.user) && !document.getElementById('app').classList.contains('visible')) {
+        doLogin();
+    }
+}
 
 function syncTasks() { 
     let tasksByYear = {};
@@ -818,15 +829,15 @@ function showToast(msg) { const t = document.getElementById('toastMsg'); t.textC
 function toggleDarkMode() { document.body.classList.toggle('dark-mode'); localStorage.setItem('hru_darkmode', document.body.classList.contains('dark-mode')); }
 if(localStorage.getItem('hru_darkmode') === 'true') document.body.classList.add('dark-mode');
 
-// GESTION RECHERCHE INTELLIGENTE
 function handleSearch(e) {
     const term = document.getElementById('searchInput').value.trim().toLowerCase();
     
+    // Si la touche n'est ni Entrée ni une flèche directionnelle
     if (e.key !== 'Enter' && e.key !== 'ArrowUp' && e.key !== 'ArrowDown') {
         if (term !== lastSearchTerm) {
             lastSearchTerm = term;
             currentSearchIndex = -1;
-            renderPlanning();
+            renderPlanning(); // Filtre dynamique classique
         }
         return;
     }
@@ -848,8 +859,8 @@ function navigateSearch(dir) {
     }
 
     currentSearchIndex += dir;
-    if (currentSearchIndex >= matches.length) currentSearchIndex = 0;
-    if (currentSearchIndex < 0) currentSearchIndex = matches.length - 1;
+    if (currentSearchIndex >= matches.length) currentSearchIndex = 0; // Boucle au début
+    if (currentSearchIndex < 0) currentSearchIndex = matches.length - 1; // Boucle à la fin
 
     const target = matches[currentSearchIndex];
     target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
@@ -1116,7 +1127,7 @@ function downloadICS() {
         if (t.period === "Apr.Midi") { startH = "14"; endH = "18"; }
         
         let isAllDay = false;
-        if (t.type === "Absence") isAllDay = true;
+        if (t.type === "Absence" || t.type === "Télétravail") isAllDay = true;
         else if (t.time) {
             let match = t.time.match(/(\d{1,2})[h:](\d{2})?/i);
             if(match) { startH = match[1].padStart(2, '0'); startM = match[2] ? match[2].padStart(2, '0') : "00"; endH = String(parseInt(startH) + 2).padStart(2, '0'); endM = startM; }
@@ -1298,11 +1309,16 @@ function renderPlanning() {
                   } else if (isLocked && canEdit) { showToast("🔒 Cette période est verrouillée"); }
                 };
                 
-                let dayTasksRaw = state.tasks.filter(t => t.date === dStr && t.period === p && t.collab === c.code).sort((a,b) => (a.position || 0) - (b.position || 0));
+                let dayTasksRaw = state.tasks.filter(t => t.date === dStr && t.period === p && t.collab === c.code).sort((a,b) => {
+                    if (a.type === 'Télétravail' && b.type !== 'Télétravail') return -1;
+                    if (b.type === 'Télétravail' && a.type !== 'Télétravail') return 1;
+                    return (a.position || 0) - (b.position || 0);
+                });
                 
                 let dayTasks = dayTasksRaw;
-                if(filterType === "prod") dayTasks = dayTasksRaw.filter(t => t.type !== "Absence");
+                if(filterType === "prod") dayTasks = dayTasksRaw.filter(t => t.type !== "Absence" && t.type !== "Télétravail");
                 if(filterType === "abs") dayTasks = dayTasksRaw.filter(t => t.type === "Absence");
+                if(filterType === "teletravail") dayTasks = dayTasksRaw.filter(t => t.type === "Télétravail");
                 if(filterType === "site") dayTasks = dayTasksRaw.filter(t => t.type === "Intervention site");
                 if(filterType === "bureau") dayTasks = dayTasksRaw.filter(t => t.type === "Réalisation bureau");
                 if(filterType === "livrables") dayTasks = dayTasksRaw.filter(t => t.type === "Envoi livrables" || t.type === "Envoi AO");
@@ -1320,6 +1336,12 @@ function renderPlanning() {
                     if (task.type === "Absence") {
                         div.className = "cell-absence"; 
                         div.innerHTML = `<span>${safeContent}</span>${noteIndicator}`;
+                    } else if (task.type === "Télétravail") {
+                        div.className = "task-item type-teletravail"; 
+                        let tmp = document.createElement("DIV"); tmp.innerHTML = task.content || "";
+                        let cleanContent = tmp.textContent || tmp.innerText;
+                        let text = "🏠 TÉLÉTRAVAIL" + (cleanContent ? ` - ${cleanContent}` : "");
+                        div.innerHTML = `${noteIndicator}<span class="task-desc" style="width:100%;text-align:center;">${text}</span>`;
                     } else {
                         div.className = `task-item ${task.type === "Intervention site" ? "type-intervention" : task.type === "Réalisation bureau" ? "type-bureau" : task.type === "Réunion" ? "type-reunion" : task.type === "Envoi livrables" ? "type-livrable" : "type-ao"}`;
                         if(task.type === "Réalisation bureau") div.style.borderColor = task.textColor;
@@ -1365,7 +1387,6 @@ function renderPlanning() {
     }
   }
 
-  // --- MISE A JOUR DU COMPTEUR DE RECHERCHE A LA FIN DU RENDU ---
   if (searchTerm) {
       const matches = document.querySelectorAll('.cell-tasks-container > div:not(.dimmed)');
       updateSearchNavUI(matches.length);
@@ -1472,7 +1493,7 @@ function saveTask() {
   }
 
   const originalDateObj = new Date(baseDateStr);
-  const isRecurrentType = (type === 'Intervention site' || type === 'Réunion');
+  const isRecurrentType = (type === 'Intervention site' || type === 'Réunion' || type === 'Télétravail');
   const loops = isRecurrentType ? recurrence : 1;
 
   let periodsToSave = [basePeriod];
@@ -1741,17 +1762,17 @@ function handleBinomeChange() { if (document.getElementById('taskBinome').value 
 
 function toggleType() { 
     const t = document.getElementById('taskType').value; 
-    const isAbs = t === 'Absence'; const isBureau = t === 'Réalisation bureau'; 
+    const isAbs = t === 'Absence'; const isBureau = t === 'Réalisation bureau'; const isTele = t === 'Télétravail';
 
-    document.getElementById('binomeSection').style.display = isAbs ? 'none' : 'block'; 
+    document.getElementById('binomeSection').style.display = (isAbs || isTele) ? 'none' : 'block'; 
     document.getElementById('groupTime').style.display = (t === 'Intervention site' || t === 'Réunion') ? 'block' : 'none'; 
     document.getElementById('groupPrestations').style.display = (t === 'Intervention site' || isBureau) ? 'block' : 'none'; 
     document.getElementById('groupLocation').style.display = (t === 'Intervention site' || t === 'Réunion') ? 'block' : 'none'; 
     document.getElementById('groupAbsence').style.display = isAbs ? 'block' : 'none'; 
     document.getElementById('groupContent').style.display = isAbs ? 'none' : 'block'; 
-    document.getElementById('groupColors').style.display = (isAbs || t.includes('Envoi') || t === 'Réunion') ? 'none' : 'block'; 
-    document.getElementById('groupUrl').style.display = isAbs ? 'none' : 'block'; 
-    document.getElementById('groupRecurrence').style.display = (t === 'Intervention site' || t === 'Réunion') ? 'block' : 'none';
+    document.getElementById('groupColors').style.display = (isAbs || t.includes('Envoi') || t === 'Réunion' || isTele) ? 'none' : 'block'; 
+    document.getElementById('groupUrl').style.display = (isAbs || isTele) ? 'none' : 'block'; 
+    document.getElementById('groupRecurrence').style.display = (t === 'Intervention site' || t === 'Réunion' || isTele) ? 'block' : 'none';
 
     const rtToolbar = document.getElementById('richTextToolbar');
     if (rtToolbar) rtToolbar.style.display = isBureau ? 'flex' : 'none';
