@@ -140,6 +140,7 @@
   .task-location { font-size: 9px; opacity: 0.8; font-weight: normal; margin-top: 2px; font-style: italic; }
   .task-time-inline { font-size: 9px; font-weight: bold; margin-top: 2px; opacity: 0.9; }
 
+  /* INFO-BULLE SUR MESURE */
   #customTooltip { position: fixed; z-index: 9999; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow-lg); padding: 12px; border-radius: 8px; font-size: 11px; max-width: 280px; pointer-events: none; display: none; line-height: 1.4; transition: opacity 0.1s; }
   body.dark-mode #customTooltip { background: var(--surface2); border-color: var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
 
@@ -321,12 +322,12 @@
             <select id="viewFilter" onchange="renderPlanning()" class="filter-select" style="display:none;">
                 <option value="all">👀 TOUT VOIR</option>
                 <option value="prod">⚙️ PROD. SEULE (SANS ABS.)</option>
-                <option value="teletravail">🏠 TÉLÉTRAVAIL SEUL</option>
                 <option value="site">🚗 INTERVENTIONS SITE</option>
                 <option value="bureau">💻 RÉALISATION BUREAU</option>
                 <option value="livrables">📦 LIVRABLES & AO</option>
                 <option value="reunion">🤝 RÉUNIONS</option>
                 <option value="abs">🏖️ ABSENCES SEULES</option>
+                <option value="teletravail">🏠 TÉLÉTRAVAIL SEUL</option>
             </select>
             <div style="position:relative; display:flex; align-items:center;">
                 <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche (Entrée)" onkeyup="handleSearch(event)">
@@ -527,7 +528,16 @@
 
     <div class="form-group" id="groupLocation" style="display:none"><label class="form-label">Lieu / Adresse</label><input type="text" id="taskLocation" class="form-input"></div>
     <div class="form-group" id="groupPrestations" style="display:none"><label class="form-label">Détail des prestations</label><textarea id="taskPrestations" class="form-input" rows="2"></textarea></div>
-    <div class="form-group" id="groupAbsence" style="display:none"><label class="form-label">Type d'absence</label><select id="absenceVal" class="form-input" onchange="toggleType()"><option value="CP">CP</option><option value="FÉRIÉ">FÉRIÉ</option><option value="FORMATION">FORMATION</option></select></div>
+    
+    <div class="form-group" id="groupAbsence" style="display:none">
+        <label class="form-label">Type d'absence</label>
+        <select id="absenceVal" class="form-input" onchange="toggleType()">
+            <option value="CP">CONGÉS PAYÉS (CP)</option>
+            <option value="AM">ARRÊT MALADIE (AM)</option>
+            <option value="FÉRIÉ">FÉRIÉ</option>
+            <option value="FORMATION">FORMATION</option>
+        </select>
+    </div>
     
     <div class="form-group" id="groupUrl"><label class="form-label">Chemin du dossier serveur</label><input type="text" id="taskUrl" class="form-input" placeholder="ex: Z:\Dossiers\HRU\..."></div>
 
@@ -653,6 +663,12 @@ firebase.auth().onAuthStateChanged((user) => {
         if(errDiv) errDiv.style.display = 'none';
     }
 });
+
+function checkAutoLogin() {
+    if(dataLoaded && (state.isAdmin || state.user) && !document.getElementById('app').classList.contains('visible')) {
+        doLogin();
+    }
+}
 
 function syncTasks() { 
     let tasksByYear = {};
@@ -855,7 +871,7 @@ function handleSearch(e) {
         if (term !== lastSearchTerm) {
             lastSearchTerm = term;
             currentSearchIndex = -1;
-            renderPlanning(); 
+            renderPlanning(); // Filtre dynamique classique
         }
         return;
     }
@@ -877,8 +893,8 @@ function navigateSearch(dir) {
     }
 
     currentSearchIndex += dir;
-    if (currentSearchIndex >= matches.length) currentSearchIndex = 0; 
-    if (currentSearchIndex < 0) currentSearchIndex = matches.length - 1; 
+    if (currentSearchIndex >= matches.length) currentSearchIndex = 0; // Boucle au début
+    if (currentSearchIndex < 0) currentSearchIndex = matches.length - 1; // Boucle à la fin
 
     const target = matches[currentSearchIndex];
     target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
@@ -1017,7 +1033,6 @@ function doLogin() {
     
     const isEditor = state.user && state.user.isEditor;
     document.getElementById('exportBtn').style.display = 'block';
-    
     document.getElementById('alertsBtn').style.display = 'block';
 
     if(state.isAdmin) { 
@@ -1679,7 +1694,7 @@ function openConsultationTask(task) {
     document.getElementById('consultNoteTaskId').value = task.id;
     document.getElementById('consultNoteArea').value = noteData ? (typeof noteData === 'string' ? noteData : noteData.text) : "";
     
-    const hideConsultNote = (task.type === 'Absence' && (task.content === 'CP' || task.content === 'FÉRIÉ')) || task.type === 'Télétravail';
+    const hideConsultNote = (task.type === 'Absence' && (task.content === 'CP' || task.content === 'FÉRIÉ' || task.content === 'AM')) || task.type === 'Télétravail';
     document.getElementById('consultNoteContainer').style.display = hideConsultNote ? 'none' : 'block';
 
     let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
@@ -1810,7 +1825,7 @@ function toggleType() {
     const pV = document.querySelector('.palette-vivid'); pV.style.display = isBureau ? 'none' : 'grid'; 
 
     const absVal = document.getElementById('absenceVal').value;
-    const hideAdminNote = (t === 'Absence' && (absVal === 'CP' || absVal === 'FÉRIÉ')) || isTele;
+    const hideAdminNote = (t === 'Absence' && (absVal === 'CP' || absVal === 'FÉRIÉ' || absVal === 'AM')) || isTele;
     document.getElementById('groupAdminNote').style.display = hideAdminNote ? 'none' : 'block';
 }
 
