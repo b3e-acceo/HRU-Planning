@@ -103,7 +103,7 @@
   .planning-table thead th { position: sticky; top: 0; background: var(--accent) !important; color: white !important; padding: 10px 5px; border: 1px solid rgba(255,255,255,0.2); font-size: 11px; z-index: 150; text-align: center; width: 180px; }
   .col-date-header { width: 85px !important; left: 0; z-index: 210 !important; }
   .col-period-header { width: 70px !important; left: 85px; z-index: 210 !important; }
-  .planning-table td { border: 1px solid var(--border); padding: 0; vertical-align: top; height: 30px; min-height: 30px; overflow: visible; cursor: pointer; }
+  .planning-table td { border: 1px solid var(--border); padding: 0; vertical-align: top; height: 30px; min-height: 30px; overflow: visible; cursor: pointer; transition: box-shadow 0.2s; }
   
   .cell-tasks-container { display: flex; flex-direction: column; min-height: 100%; width: 100%; align-items: stretch; }
   .cell-absence { background-color: var(--grey-absence) !important; display: flex !important; align-items: center; justify-content: center; font-weight: 800; color: #555; text-transform: uppercase; font-size: 11px; flex: 1; width: 100%; transition: opacity 0.3s; margin: 0; min-height: 24px; border-left: 4px solid #555; position: relative; overflow: hidden; padding-right: 18px; }
@@ -117,20 +117,8 @@
 
   .task-item { padding: 2px 18px 2px 6px; border-radius: 0; font-size: 11px; cursor: grab; line-height: 1.1; box-shadow: none; width: 100%; flex: 1; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; border-left: 4px solid rgba(0,0,0,0.3); margin: 0; transition: opacity 0.3s, transform 0.3s, box-shadow 0.3s; min-height: 24px; position: relative; overflow: hidden; }
   
-  /* --- FIX DU BADGE TELETRAVAIL --- */
   .type-teletravail { 
-      flex: 0 0 auto !important; 
-      height: 16px !important; 
-      min-height: 16px !important; 
-      font-size: 9px !important; 
-      font-weight: 800 !important; 
-      background: #e3f2fd !important; 
-      color: #0277bd !important; 
-      border: 1px dashed #0277bd !important; 
-      border-left: 3px solid #0277bd !important; 
-      text-align: center; 
-      justify-content: center; 
-      padding: 0 !important; 
+      flex: 0 0 auto !important; height: 16px !important; min-height: 16px !important; font-size: 9px !important; font-weight: 800 !important; background: #e3f2fd !important; color: #0277bd !important; border: 1px dashed #0277bd !important; border-left: 3px solid #0277bd !important; text-align: center; justify-content: center; padding: 0 !important; 
   }
 
   .task-desc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
@@ -140,7 +128,6 @@
   .task-location { font-size: 9px; opacity: 0.8; font-weight: normal; margin-top: 2px; font-style: italic; }
   .task-time-inline { font-size: 9px; font-weight: bold; margin-top: 2px; opacity: 0.9; }
 
-  /* INFO-BULLE SUR MESURE */
   #customTooltip { position: fixed; z-index: 9999; background: var(--surface); color: var(--text); border: 1px solid var(--border); box-shadow: var(--shadow-lg); padding: 12px; border-radius: 8px; font-size: 11px; max-width: 280px; pointer-events: none; display: none; line-height: 1.4; transition: opacity 0.1s; }
   body.dark-mode #customTooltip { background: var(--surface2); border-color: var(--border); box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
 
@@ -322,12 +309,12 @@
             <select id="viewFilter" onchange="renderPlanning()" class="filter-select" style="display:none;">
                 <option value="all">👀 TOUT VOIR</option>
                 <option value="prod">⚙️ PROD. SEULE (SANS ABS.)</option>
+                <option value="teletravail">🏠 TÉLÉTRAVAIL SEUL</option>
                 <option value="site">🚗 INTERVENTIONS SITE</option>
                 <option value="bureau">💻 RÉALISATION BUREAU</option>
                 <option value="livrables">📦 LIVRABLES & AO</option>
                 <option value="reunion">🤝 RÉUNIONS</option>
                 <option value="abs">🏖️ ABSENCES SEULES</option>
-                <option value="teletravail">🏠 TÉLÉTRAVAIL SEUL</option>
             </select>
             <div style="position:relative; display:flex; align-items:center;">
                 <input type="text" id="searchInput" class="search-input" placeholder="🔍 Recherche (Entrée)" onkeyup="handleSearch(event)">
@@ -379,6 +366,10 @@
         <button onclick="startAlertSelection()" style="background:var(--accent); color:white; border:none; padding:4px 8px; border-radius:4px; cursor:pointer;" title="Sélectionner sur le planning">📅 Choisir</button>
     </div>
     <input type="hidden" id="alertContext">
+    <input type="hidden" id="alertTargetDate">
+    <input type="hidden" id="alertTargetPeriod">
+    <input type="hidden" id="alertTargetCollab">
+    <input type="hidden" id="alertTargetTaskId">
 
     <div class="form-group">
         <label class="form-label">Votre message</label>
@@ -577,7 +568,6 @@ let redoHistory = [];
 let tooltipTimeout = null, lastMouseE = null;
 let alertSelectionMode = false; 
 
-// VARIABLES GESTION RECHERCHE
 let currentSearchIndex = -1;
 let lastSearchTerm = "";
 
@@ -603,7 +593,6 @@ function startAuthenticatedData() {
     db.ref('planning/config').on('value', s => { state.config = s.val() || {lockPast:false}; updateLockBtnUI(); });
     db.ref('planning/notes').on('value', s => { state.notes = s.val() || {}; renderPlanning(); });
     
-    // Ecoute des alertes
     db.ref('planning/alerts').on('value', s => { 
         state.alerts = s.val() ? Object.values(s.val()) : []; 
         updateAlertsUI(); 
@@ -755,13 +744,18 @@ function openAlertsListModal() {
             btnHtml = a.resolved ? `<span style="font-size:10px; color:var(--green-hru); font-weight:bold;">✔ Traitée par ${resBy}</span>` : `<span style="font-size:10px; color:var(--orange); font-weight:bold;">⏳ En attente</span>`;
         }
 
+        let viewBtn = '';
+        if (a.targetDate) {
+            viewBtn = `<button onclick="jumpToAlertTarget('${a.id}')" style="background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:4px; padding:2px 6px; font-size:10px; cursor:pointer; margin-left:10px;">🔍 Voir</button>`;
+        }
+
         list.innerHTML += `
             <div style="background:${bg}; opacity:${opacity}; padding:10px; border:1px solid var(--border); border-radius:6px; margin-bottom:8px;">
                 <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
                     <b style="font-size:11px; color:var(--accent)">De: ${a.author} <span style="color:gray; font-weight:normal;">(${d})</span></b>
                     <div>${btnHtml}</div>
                 </div>
-                <div style="font-size:10px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">Concerne : ${a.context}</div>
+                <div style="font-size:10px; font-weight:bold; color:var(--text-muted); margin-bottom:4px; display:flex; align-items:center;">Concerne : ${a.context} ${viewBtn}</div>
                 <div style="font-size:12px;">${a.message}</div>
             </div>
         `;
@@ -770,8 +764,13 @@ function openAlertsListModal() {
     document.getElementById('alertsListModal').classList.add('open');
 }
 
-function openAlertCreateModal(contextText = 'Remarque générale sur le planning') {
+function openAlertCreateModal(contextText = 'Remarque générale sur le planning', tDate = '', tPeriod = '', tCollab = '', tTaskId = '') {
     document.getElementById('alertContext').value = contextText;
+    document.getElementById('alertTargetDate').value = tDate;
+    document.getElementById('alertTargetPeriod').value = tPeriod;
+    document.getElementById('alertTargetCollab').value = tCollab;
+    document.getElementById('alertTargetTaskId').value = tTaskId;
+    
     document.getElementById('alertContextDisplay').textContent = "Concerne : " + contextText;
     document.getElementById('alertMessage').value = '';
     document.getElementById('alertCreateModal').classList.add('open');
@@ -788,7 +787,7 @@ function cancelAlertSelection() {
     alertSelectionMode = false;
     document.getElementById('alertSelectionBanner').style.display = 'none';
     const oldCtx = document.getElementById('alertContext').value || 'Remarque générale sur le planning';
-    openAlertCreateModal(oldCtx);
+    openAlertCreateModal(oldCtx, '', '', '', '');
 }
 
 function sendAlert() {
@@ -802,7 +801,11 @@ function sendAlert() {
         context: ctx,
         message: msg,
         timestamp: Date.now(),
-        resolved: false
+        resolved: false,
+        targetDate: document.getElementById('alertTargetDate').value,
+        targetPeriod: document.getElementById('alertTargetPeriod').value,
+        targetCollab: document.getElementById('alertTargetCollab').value,
+        targetTaskId: document.getElementById('alertTargetTaskId').value
     };
     
     state.alerts.push(newAlert);
@@ -827,6 +830,48 @@ function deleteAlert(id) {
         state.alerts = state.alerts.filter(a => a.id !== id);
         syncAlerts();
         openAlertsListModal();
+    }
+}
+
+function jumpToAlertTarget(id) {
+    const alert = state.alerts.find(a => a.id === id);
+    if (!alert || !alert.targetDate) return;
+    closeModal('alertsListModal');
+
+    const targetYear = parseInt(alert.targetDate.split('-')[0]);
+    if (state.currentYear !== targetYear) {
+        state.currentYear = targetYear;
+        loadTasksForYear(targetYear);
+        renderYearTabs();
+        setTimeout(() => executeJump(alert), 1000);
+    } else {
+        executeJump(alert);
+    }
+}
+
+function executeJump(alert) {
+    let targetEl = null;
+
+    if (alert.targetTaskId) {
+        targetEl = document.querySelector(`[data-task-id="${alert.targetTaskId}"]`);
+    }
+
+    if (!targetEl && alert.targetDate && alert.targetPeriod && alert.targetCollab) {
+        targetEl = document.querySelector(`td[data-date="${alert.targetDate}"][data-period="${alert.targetPeriod}"][data-collab="${alert.targetCollab}"]`);
+    }
+
+    if (targetEl) {
+        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        const oldShadow = targetEl.style.boxShadow;
+        const oldTransition = targetEl.style.transition;
+        targetEl.style.transition = 'box-shadow 0.2s';
+        targetEl.style.boxShadow = '0 0 0 3px var(--accent), 0 0 15px var(--accent)';
+        setTimeout(() => {
+            targetEl.style.boxShadow = oldShadow;
+            setTimeout(() => { targetEl.style.transition = oldTransition; }, 200);
+        }, 2500);
+    } else {
+        showToast("Élément introuvable (peut-être modifié/supprimé)");
     }
 }
 
@@ -871,7 +916,7 @@ function handleSearch(e) {
         if (term !== lastSearchTerm) {
             lastSearchTerm = term;
             currentSearchIndex = -1;
-            renderPlanning(); // Filtre dynamique classique
+            renderPlanning(); 
         }
         return;
     }
@@ -893,8 +938,8 @@ function navigateSearch(dir) {
     }
 
     currentSearchIndex += dir;
-    if (currentSearchIndex >= matches.length) currentSearchIndex = 0; // Boucle au début
-    if (currentSearchIndex < 0) currentSearchIndex = matches.length - 1; // Boucle à la fin
+    if (currentSearchIndex >= matches.length) currentSearchIndex = 0; 
+    if (currentSearchIndex < 0) currentSearchIndex = matches.length - 1; 
 
     const target = matches[currentSearchIndex];
     target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
@@ -1298,6 +1343,11 @@ function renderPlanning() {
             
             sortedCollabs.forEach(c => {
                 const cell = document.createElement('td');
+                // Données cachées pour permettre au bouton "🔍 Voir" de sauter directement sur cette case
+                cell.dataset.date = dStr;
+                cell.dataset.period = p;
+                cell.dataset.collab = c.code;
+                
                 if(isLocked) cell.classList.add('locked-cell');
                 
                 if(canEdit && !isLocked) {
@@ -1334,7 +1384,7 @@ function renderPlanning() {
                 cell.onclick = (e) => { 
                   if (alertSelectionMode) {
                       e.stopPropagation(); alertSelectionMode = false; document.getElementById('alertSelectionBanner').style.display = 'none';
-                      openAlertCreateModal(`Période : ${dStr.split('-').reverse().join('/')} (${p}) pour ${c.code}`);
+                      openAlertCreateModal(`Période : ${dStr.split('-').reverse().join('/')} (${p}) pour ${c.code}`, dStr, p, c.code, '');
                       return;
                   }
                   if(canEdit && !isLocked) {
@@ -1367,6 +1417,8 @@ function renderPlanning() {
                     const safeContent = (task.content || '').replace(/\n/g, '<br>');
 
                     const div = document.createElement('div');
+                    div.dataset.taskId = task.id; // Permet de cibler spécifiquement la tâche
+                    
                     if (task.type === "Absence") {
                         div.className = "cell-absence"; 
                         div.innerHTML = `<span>${safeContent}</span>${noteIndicator}`;
@@ -1400,14 +1452,14 @@ function renderPlanning() {
                         if (alertSelectionMode) {
                             alertSelectionMode = false; document.getElementById('alertSelectionBanner').style.display = 'none';
                             let tmp = document.createElement("DIV"); tmp.innerHTML = task.content;
-                            openAlertCreateModal(`Tâche "${tmp.textContent || tmp.innerText}" de ${task.collab} le ${task.date.split('-').reverse().join('/')}`);
+                            openAlertCreateModal(`Tâche "${tmp.textContent || tmp.innerText}" de ${task.collab} le ${task.date.split('-').reverse().join('/')}`, task.date, task.period, task.collab, task.id);
                             return;
                         }
                         if (canEdit && clipboardTask && !isLocked) pasteTask(dStr, p, c.code); 
                         else if (canEdit && !isLocked) openModalTask(task); 
                         else openConsultationTask(task); 
                     };
-                    if(canEdit && !isLocked) { div.draggable = true; div.dataset.taskId = task.id; div.ondragstart = (e) => { clearTimeout(tooltipTimeout); hideTooltip(); draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
+                    if(canEdit && !isLocked) { div.draggable = true; div.ondragstart = (e) => { clearTimeout(tooltipTimeout); hideTooltip(); draggedTaskId = task.id; e.stopPropagation(); }; div.ondragend = () => { draggedTaskId = null; }; }
                     container.appendChild(div);
                 });
                 
@@ -1701,7 +1753,7 @@ function openConsultationTask(task) {
     const taskTitleClean = tmp.textContent || tmp.innerText;
     document.getElementById('btnConsultAlert').onclick = () => {
         closeModal('viewModal');
-        openAlertCreateModal(`Tâche "${taskTitleClean}" de ${task.collab} le ${task.date.split('-').reverse().join('/')}`);
+        openAlertCreateModal(`Tâche "${taskTitleClean}" de ${task.collab} le ${task.date.split('-').reverse().join('/')}`, task.date, task.period, task.collab, task.id);
     };
 
     document.getElementById('viewModal').classList.add('open'); 
