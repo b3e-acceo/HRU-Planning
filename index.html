@@ -573,7 +573,7 @@ let lastSearchTerm = "";
 
 let state = { user: null, isAdmin: false, collabs: [], tasks: [], trash: [], alerts: [], config: { lockPast: false }, notes: {}, favCollab: localStorage.getItem('hru_fav') || null, customOrder: JSON.parse(localStorage.getItem('hru_order')) || null, years: [2026, 2027], currentYear: 2026 };
 
-const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaëtan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
+const DEFAULT_COLLABS = [{"code":"ADO","name":"Alexandre DORBEAUX"},{"code":"FLA","name":"François LABBÉ"},{"code":"JTE","name":"Joss TEILLIER"},{"code":"MLB","name":"Maud LE BERRE"},{"code":"JJE","name":"Johanna JEREMI"},{"code":"DCH","name":"Dorian CHAT"},{"code":"SKI","name":"Sabari KIROUCHENAMOURTHY"},{"code":"HMZ","name":"Houssem MZOUGHI"},{"code":"AFO","name":"Axel FORTAS"},{"code":"GLU","name":"Gaétan LUISIN"},{"code":"YCO","name":"Yvon COUDRAIS"},{"code":"SGU","name":"Sean GUERET"},{"code":"SBL","name":"Stéphane BLOTT"},{"code":"SFA","name":"Seydina FAYE"}];
 
 db.ref('planning/collabs').on('value', s => { 
     state.collabs = s.val() || DEFAULT_COLLABS; 
